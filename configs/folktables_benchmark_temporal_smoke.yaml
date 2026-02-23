@@ -1,0 +1,35 @@
+experiment:
+  name: "folktables_benchmark_temporal_smoke"
+  type: "benchmark"
+  data_type: "folktables"
+
+data:
+  task: "income"
+  states: ["CA"]
+  mode: "temporal"
+  frequency: "quarter"
+  train_years: [2014]
+  val_years: [2015]
+  test_years: [2016,2017]
+  sensitive_attribute: "SEX"
+  max_samples: 2000
+  max_samples_per_year: 2000
+
+methods:
+  - baseline
+  - reweighing
+  - equalized_odds
+  - fairness_constraint
+
+maintenance_strategies:
+  - "no-retrain"
+
+seeds: [0,1,2,3,4,5]
+threshold_grid: [0.3, 0.5, 0.7]
+
+fairness_constraint:
+  num_iters: 4
+  lr: 0.1
+
+output:
+  dir: "results/folktables/benchmark_temporal_smoke"
