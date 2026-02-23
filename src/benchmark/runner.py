@@ -1,0 +1,384 @@
+"""Benchmark runner implementation (static and temporal)."""
+
+import json
+from datetime import datetime
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+import yaml
+from sklearn.preprocessing import StandardScaler
+
+from src.benchmark.data import (
+    load_folktables,
+    load_folktables_by_year,
+    load_folktables_by_period,
+    stratified_split,
+)
+from src.benchmark.methods import (
+    make_model,
+    kamiran_calders_weights,
+    choose_thresholds_equalized_odds,
+    train_with_lagrangian,
+)
+from src.benchmark.metrics import compute_metrics
+from src.benchmark.reporting import (
+    flatten_summary_columns,
+    plot_temporal_metrics,
+    plot_static_comparison,
+    plot_temporal_comparison_by_year,
+    plot_original_vs_updated,
+    compute_confidence_intervals,
+    statistical_tests_vs_baseline,
+)
+
+
+def _train_method_on_data(method, X_train, y_train, A_train, X_val, y_val, A_val, seed, threshold_grid, config):
+    """Train a single fairness method. Returns model and thresholds if applicable."""
+    if method == "baseline":
+        model = make_model(seed)
+        model.fit(X_train, y_train)
+        return model, None
+    
+    elif method == "reweighing":
+        weights = kamiran_calders_weights(y_train, A_train)
+        model = make_model(seed)
+        model.fit(X_train, y_train, sample_weight=weights)
+        return model, None
+    
+    elif method == "equalized_odds":
+        model = make_model(seed)
+        model.fit(X_train, y_train)
+        y_val_proba = model.predict_proba(X_val)[:, 1]
+        thresholds = choose_thresholds_equalized_odds(y_val, y_val_proba, A_val, grid=threshold_grid)
+        return model, thresholds
+    
+    elif method == "fairness_constraint":
+        lag_cfg = config.get("fairness_constraint", {})
+        num_iters = int(lag_cfg.get("num_iters", 8))
+        lr = float(lag_cfg.get("lr", 0.1))
+        model = train_with_lagrangian(X_train, y_train, A_train, seed, num_iters, lr)
+        return model, None
+    
+    else:
+        raise ValueError(f"Unknown method: {method}")
+
+
+def _predict_with_method(method, model, thresholds, X_test, A_test):
+    """Get predictions from a trained model."""
+    y_proba = model.predict_proba(X_test)[:, 1]
+    
+    if method == "equalized_odds" and thresholds is not None:
+        y_pred = np.where(
+            A_test == 0,
+            y_proba >= thresholds[0],
+            y_proba >= thresholds[1],
+        ).astype(int)
+    else:
+        y_pred = (y_proba >= 0.5).astype(int)
+    
+    return y_pred, y_proba
+
+
+def run_benchmark(config_path: str):
+    with open(config_path, "r") as f:
+        config = yaml.safe_load(f)
+
+    data_cfg = config["data"]
+    exp_cfg = config["experiment"]
+    methods = config["methods"]
+    split = config.get("split", [0.6, 0.1, 0.3])
+    seeds = config.get("seeds", list(range(20)))
+    threshold_grid = config.get("threshold_grid", np.linspace(0.05, 0.95, 19).tolist())
+
+    output_dir = Path(config["output"]["dir"])
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Save resolved config snapshot
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    config_out = output_dir / f"config_{timestamp}.yaml"
+    with open(config_out, "w") as f:
+        yaml.dump(config, f)
+
+    mode = data_cfg.get("mode", "static")
+    compare_outputs = config.get("compare_outputs", [])
+
+    results_by_year = []
+    max_samples = data_cfg.get("max_samples")
+    max_samples_per_year = data_cfg.get("max_samples_per_year")
+    sample_seed = int(config.get("sample_seed", 42))
+    
+    # Get maintenance strategies (no-retrain, retrain)
+    maintenance_strategies = config.get("maintenance_strategies", ["no-retrain"])
+
+    if mode == "temporal":
+        train_years = data_cfg["train_years"]
+        val_years = data_cfg["val_years"]
+        test_years = data_cfg["test_years"]
+        frequency = data_cfg.get("frequency", "year")
+
+        # Load training data (once, used for no-retrain)
+        X_train_df, y_train, A_train = load_folktables(
+            task=data_cfg["task"],
+            states=data_cfg["states"],
+            years=train_years,
+            sensitive_attribute=data_cfg["sensitive_attribute"],
+            max_samples=max_samples,
+            random_state=sample_seed,
+        )
+        X_val_df, y_val, A_val = load_folktables(
+            task=data_cfg["task"],
+            states=data_cfg["states"],
+            years=val_years,
+            sensitive_attribute=data_cfg["sensitive_attribute"],
+            max_samples=max_samples,
+            random_state=sample_seed + 1,
+        )
+        X_test_df, y_test, A_test = load_folktables(
+            task=data_cfg["task"],
+            states=data_cfg["states"],
+            years=test_years,
+            sensitive_attribute=data_cfg["sensitive_attribute"],
+            max_samples=max_samples,
+            random_state=sample_seed + 2,
+        )
+
+        test_by_year, base_columns = load_folktables_by_period(
+            task=data_cfg["task"],
+            states=data_cfg["states"],
+            years=test_years,
+            sensitive_attribute=data_cfg["sensitive_attribute"],
+            frequency=frequency,
+            max_samples_per_year=max_samples_per_year,
+            random_state=sample_seed + 3,
+        )
+
+        X_val_df = X_val_df.reindex(columns=base_columns, fill_value=0)
+        X_test_df = X_test_df.reindex(columns=base_columns, fill_value=0)
+        X_train_df = X_train_df.reindex(columns=base_columns, fill_value=0)
+        
+        # For retrain: also load training data by year
+        retrain_by_year = None
+        if "retrain" in maintenance_strategies:
+            retrain_by_year, _ = load_folktables_by_year(
+                task=data_cfg["task"],
+                states=data_cfg["states"],
+                years=train_years,
+                sensitive_attribute=data_cfg["sensitive_attribute"],
+                max_samples_per_year=max_samples_per_year,
+                random_state=sample_seed + 4,
+            )
+    else:
+        X_df, y_all, A_all = load_folktables(
+            task=data_cfg["task"],
+            states=data_cfg["states"],
+            years=data_cfg["years"],
+            sensitive_attribute=data_cfg["sensitive_attribute"],
+            max_samples=max_samples,
+            random_state=sample_seed,
+        )
+
+    results = []
+    for seed in seeds:
+        if mode == "temporal":
+            X_train = X_train_df.values
+            X_val = X_val_df.values
+            X_test = X_test_df.values
+        else:
+            X_train, X_val, X_test, y_train, y_val, y_test, A_train, A_val, A_test = stratified_split(
+                X_df.values, y_all, A_all, seed=seed, split=split
+            )
+
+        scaler = StandardScaler()
+        X_train = scaler.fit_transform(X_train)
+        X_val = scaler.transform(X_val)
+        X_test = scaler.transform(X_test)
+
+        # === NO-RETRAIN SCENARIO ===
+        if "no-retrain" in maintenance_strategies:
+            for method in methods:
+                model, thresholds = _train_method_on_data(
+                    method, X_train, y_train, A_train, X_val, y_val, A_val, seed, threshold_grid, config
+                )
+                
+                # Test on aggregated test set
+                y_pred, y_proba = _predict_with_method(method, model, thresholds, X_test, A_test)
+                metrics = compute_metrics(y_test, y_pred, y_proba, A_test)
+                result_entry = {
+                    "seed": seed,
+                    "method": method,
+                    **metrics
+                }
+                if mode == "temporal":
+                    result_entry["maintenance"] = "no-retrain"
+                results.append(result_entry)
+
+                # Test on each year
+                if mode == "temporal":
+                    for year, (X_year, y_year, A_year) in test_by_year.items():
+                        X_year_scaled = scaler.transform(X_year.values)
+                        y_year_pred, y_year_proba = _predict_with_method(
+                            method, model, thresholds, X_year_scaled, A_year
+                        )
+                        metrics_year = compute_metrics(y_year, y_year_pred, y_year_proba, A_year)
+                        results_by_year.append({
+                            "seed": seed,
+                            "method": method,
+                            "maintenance": "no-retrain",
+                            "year": year,
+                            **metrics_year,
+                        })
+
+        # === RETRAIN SCENARIO ===
+        if "retrain" in maintenance_strategies and mode == "temporal":
+            # For each test year, retrain on all data up to that year
+            sorted_test_years = sorted(test_by_year.keys())
+            for test_year in sorted_test_years:
+                # Train only on years strictly before the test year to avoid leakage
+                history_years = sorted(set(train_years + val_years))
+                train_years_for_retrain = [y for y in history_years if y < test_year]
+                if not train_years_for_retrain:
+                    train_years_for_retrain = history_years
+                
+                X_retrain_df, y_retrain, A_retrain = load_folktables(
+                    task=data_cfg["task"],
+                    states=data_cfg["states"],
+                    years=train_years_for_retrain,
+                    sensitive_attribute=data_cfg["sensitive_attribute"],
+                    max_samples=max_samples,
+                    random_state=int(sample_seed + 5 + test_year),
+                )
+                X_retrain_df = X_retrain_df.reindex(columns=base_columns, fill_value=0)
+                
+                # Use validation years strictly before the test year
+                val_years_for_retrain = [y for y in val_years if y < test_year]
+                if not val_years_for_retrain:
+                    val_years_for_retrain = train_years_for_retrain
+                X_val_retrain_df, y_val_retrain, A_val_retrain = load_folktables(
+                    task=data_cfg["task"],
+                    states=data_cfg["states"],
+                    years=val_years_for_retrain,
+                    sensitive_attribute=data_cfg["sensitive_attribute"],
+                    max_samples=max_samples,
+                    random_state=int(sample_seed + 6 + test_year),
+                )
+                X_val_retrain_df = X_val_retrain_df.reindex(columns=base_columns, fill_value=0)
+                
+                # Scale retrain data
+                scaler_retrain = StandardScaler()
+                X_retrain = scaler_retrain.fit_transform(X_retrain_df.values)
+                X_val_retrain = scaler_retrain.transform(X_val_retrain_df.values)
+                
+                for method in methods:
+                    model, thresholds = _train_method_on_data(
+                        method, X_retrain, y_retrain, A_retrain, 
+                        X_val_retrain, y_val_retrain, A_val_retrain, 
+                        seed, threshold_grid, config
+                    )
+                    
+                    # Test on current year only
+                    X_year, y_year, A_year = test_by_year[test_year]
+                    X_year_scaled = scaler_retrain.transform(X_year.values)
+                    y_year_pred, y_year_proba = _predict_with_method(
+                        method, model, thresholds, X_year_scaled, A_year
+                    )
+                    metrics_year = compute_metrics(y_year, y_year_pred, y_year_proba, A_year)
+                    results_by_year.append({
+                        "seed": seed,
+                        "method": method,
+                        "maintenance": "retrain",
+                        "year": test_year,
+                        **metrics_year,
+                    })
+
+    results_df = pd.DataFrame(results)
+    results_path = output_dir / "benchmark_results.csv"
+    results_df.to_csv(results_path, index=False)
+
+    # Summary with mean, std, and 95% CI
+    # For temporal mode with maintenance column, group by method+maintenance
+    if mode == "temporal" and "maintenance" in results_df.columns:
+        summary_ci = compute_confidence_intervals(results_df, ci=0.95, group_by=["method", "maintenance"])
+    else:
+        summary_ci = compute_confidence_intervals(results_df, ci=0.95)
+    
+    summary_ci_path = output_dir / "benchmark_summary_ci.csv"
+    summary_ci.to_csv(summary_ci_path, index=False)
+    
+    # Statistical tests vs baseline
+    if len(results_df["method"].unique()) > 1:
+        sig_tests = statistical_tests_vs_baseline(results_df)
+        tests_path = output_dir / "benchmark_statistical_tests.csv"
+        sig_tests.to_csv(tests_path, index=False)
+
+    summary_group_cols = ["method"]
+    if "maintenance" in results_df.columns:
+        summary_group_cols.append("maintenance")
+    numeric_cols = results_df.select_dtypes(include=[np.number]).columns
+    summary = (
+        results_df.groupby(summary_group_cols)[numeric_cols]
+        .agg(["mean", "std"])
+        .reset_index()
+    )
+    summary = flatten_summary_columns(summary)
+    summary_path = output_dir / "benchmark_summary.csv"
+    summary.to_csv(summary_path, index=False)
+    
+    # Generate static plots for static benchmarks
+    if mode == "static":
+        plot_static_comparison(summary_ci, output_dir)
+
+    if mode == "temporal" and results_by_year:
+        results_by_year_df = pd.DataFrame(results_by_year)
+        results_by_year_path = output_dir / "benchmark_results_by_year.csv"
+        results_by_year_df.to_csv(results_by_year_path, index=False)
+
+        # Include maintenance in groupby if it exists
+        groupby_cols = ["year", "method"]
+        if "maintenance" in results_by_year_df.columns:
+            groupby_cols.append("maintenance")
+        
+        numeric_year_cols = results_by_year_df.select_dtypes(include=[np.number]).columns
+        summary_by_year = (
+            results_by_year_df.groupby(groupby_cols, sort=True)[numeric_year_cols]
+            .agg(["mean", "std"])
+            .reset_index()
+        )
+        summary_by_year = flatten_summary_columns(summary_by_year)
+        summary_by_year_path = output_dir / "benchmark_summary_by_year.csv"
+        summary_by_year.to_csv(summary_by_year_path, index=False)
+
+        plot_temporal_metrics(results_by_year_df, output_dir)
+        plot_temporal_comparison_by_year(results_by_year_df, output_dir)
+        plot_original_vs_updated(results_by_year_df, output_dir)
+
+    meta = {
+        "experiment": exp_cfg["name"],
+        "methods": methods,
+        "seeds": seeds,
+        "results": str(results_path),
+        "summary": str(summary_path),
+    }
+
+    if compare_outputs:
+        comparison_tables = []
+        compare_paths = [summary_path] + [Path(p) for p in compare_outputs]
+        for path in compare_paths:
+            df = pd.read_csv(path)
+            df["source"] = path.stem
+            comparison_tables.append(df)
+        comparison_df = pd.concat(comparison_tables, ignore_index=True)
+        comparison_path = output_dir / "benchmark_comparison.csv"
+        comparison_df.to_csv(comparison_path, index=False)
+        meta["comparison"] = str(comparison_path)
+
+    meta_path = output_dir / "run_meta.json"
+    with open(meta_path, "w") as f:
+        json.dump(meta, f, indent=2)
+
+    print("✓ Benchmark complete")
+    print(f"  Results: {results_path}")
+    print(f"  Summary: {summary_path}")
+    print(f"  Summary with CI: {summary_ci_path}")
+    if len(results_df["method"].unique()) > 1:
+        print(f"  Statistical tests: {tests_path}")
