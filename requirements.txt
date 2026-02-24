@@ -1,0 +1,9 @@
+folktables
+matplotlib
+numpy
+pandas
+pyyaml
+scikit-learn
+scipy
+seaborn
+tqdm

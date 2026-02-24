@@ -79,7 +79,13 @@ def compute_confidence_intervals(results_df: pd.DataFrame, ci=0.95, group_by=Non
     if group_by is None:
         group_by = ["method"]
     
-    metrics = [col for col in results_df.columns if col not in ["seed", "method", "maintenance"]]
+    # If sensitive_attribute is present and not in group_by, add it
+    if "sensitive_attribute" in results_df.columns and "sensitive_attribute" not in group_by:
+        group_by = group_by + ["sensitive_attribute"]
+    
+    # Filter for numeric columns only
+    numeric_cols = results_df.select_dtypes(include=[np.number]).columns
+    metrics = [col for col in numeric_cols if col not in ["seed", "year"]]
     
     summary_data = []
     for group_vals in results_df.groupby(group_by, sort=True).groups:
@@ -111,7 +117,9 @@ def compute_confidence_intervals(results_df: pd.DataFrame, ci=0.95, group_by=Non
 
 def statistical_tests_vs_baseline(results_df: pd.DataFrame) -> pd.DataFrame:
     """Run t-tests comparing each method vs baseline."""
-    metrics = [col for col in results_df.columns if col not in ["seed", "method", "maintenance", "year"]]
+    # Filter for numeric columns only, excluding metadata and string columns
+    numeric_cols = results_df.select_dtypes(include=[np.number]).columns
+    metrics = [col for col in numeric_cols if col not in ["seed", "year"]]
     baseline_data = results_df[results_df["method"] == "baseline"]
     
     test_results = []
@@ -278,6 +286,7 @@ def plot_original_vs_updated(results_by_year_df, output_dir):
     axes = axes.flatten()
     
     colors = {"no-retrain": "#6E6E6E", "retrain": "#2C7FB8"}
+    years_sorted = sorted(results_by_year_df["year"].unique())
     
     for idx, metric in enumerate(metrics):
         ax = axes[idx]
@@ -297,10 +306,22 @@ def plot_original_vs_updated(results_by_year_df, output_dir):
             ax.plot(years, means, linewidth=2.0, linestyle=line_style, color=colors[maintenance], label=label)
             ax.fill_between(years, means - cis, means + cis, color=colors[maintenance], alpha=0.15)
 
-        # Baseline initial performance (first period) as a reference line
-        if years:
-            baseline_value = means[0]
-            ax.axhline(baseline_value, color="#333333", linestyle=":", linewidth=1.2, label="Initial performance")
+        # Baseline initial performance from the first period of the original model
+        if years_sorted:
+            first_period = years_sorted[0]
+            baseline_rows = results_by_year_df[
+                (results_by_year_df["maintenance"] == "no-retrain")
+                & (results_by_year_df["year"] == first_period)
+            ]
+            if not baseline_rows.empty:
+                baseline_value = baseline_rows[metric].mean()
+                ax.axhline(
+                    baseline_value,
+                    color="#333333",
+                    linestyle=":",
+                    linewidth=1.2,
+                    label="Initial performance",
+                )
 
         _apply_period_ticks(ax, years, label="Year")
         ax.set_ylabel(metric.replace("_", " ").title())

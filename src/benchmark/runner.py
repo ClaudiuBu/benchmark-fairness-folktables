@@ -9,6 +9,7 @@ import pandas as pd
 import yaml
 from sklearn.preprocessing import StandardScaler
 
+from src.benchmark.progress import ProgressTracker, ProgressCalculator
 from src.benchmark.data import (
     load_folktables,
     load_folktables_by_year,
@@ -22,6 +23,8 @@ from src.benchmark.methods import (
     train_with_lagrangian,
 )
 from src.benchmark.metrics import compute_metrics
+from src.benchmark.tables.initial_performance import _format_ci
+from src.benchmark.data import extract_sensitive_attribute, extract_multiple_sensitive_attributes
 from src.benchmark.reporting import (
     flatten_summary_columns,
     plot_temporal_metrics,
@@ -31,6 +34,65 @@ from src.benchmark.reporting import (
     compute_confidence_intervals,
     statistical_tests_vs_baseline,
 )
+
+
+def _generate_initial_performance_table(summary_ci: pd.DataFrame, task: str, output_dir: Path):
+    """Generate initial performance table (metrics by method with CI) for paper."""
+    metrics = ["dp_gap", "eo_gap", "accuracy", "auc"]
+    metric_labels = {
+        "dp_gap": "DP Gap",
+        "eo_gap": "EO Gap",
+        "accuracy": "Accuracy",
+        "auc": "AUC"
+    }
+    
+    rows = []
+    for metric in metrics:
+        row = {"Metric": metric_labels[metric]}
+        
+        for method in summary_ci["method"].unique():
+            method_data = summary_ci[summary_ci["method"] == method]
+            
+            if not method_data.empty:
+                val = _format_ci(method_data.iloc[0], metric)
+            else:
+                val = "-"
+            
+            col_name = method.replace("_", " ").title()
+            row[col_name] = val
+        
+        rows.append(row)
+    
+    table_df = pd.DataFrame(rows)
+    
+    # Save as LaTeX
+    latex_table = table_df.to_latex(index=False, escape=False)
+    table_path = output_dir / f"initial_performance_{task}.tex"
+    table_path.write_text(latex_table)
+
+
+def _compute_metrics_all_attributes(y_true, y_pred, y_proba, X_test: pd.DataFrame) -> list:
+    """Compute metrics for all available sensitive attributes (SEX, RAC1P).
+    
+    Returns list of dicts with 'sensitive_attribute' column added.
+    """
+    results = []
+    
+    # Attribute 1: SEX
+    if "SEX" in X_test.columns:
+        A_sex = (X_test["SEX"] == 1).astype(int)
+        metrics_sex = compute_metrics(y_true, y_pred, y_proba, A_sex)
+        metrics_sex["sensitive_attribute"] = "SEX"
+        results.append(metrics_sex)
+    
+    # Attribute 2: RAC1P (binary: 1=White, 0=Non-White)
+    if "RAC1P" in X_test.columns:
+        A_race = (X_test["RAC1P"] == 1).astype(int)
+        metrics_race = compute_metrics(y_true, y_pred, y_proba, A_race)
+        metrics_race["sensitive_attribute"] = "RAC1P"
+        results.append(metrics_race)
+    
+    return results
 
 
 def _train_method_on_data(method, X_train, y_train, A_train, X_val, y_val, A_val, seed, threshold_grid, config):
@@ -125,6 +187,7 @@ def run_benchmark(config_path: str):
             sensitive_attribute=data_cfg["sensitive_attribute"],
             max_samples=max_samples,
             random_state=sample_seed,
+            keep_sensitive_cols=True,
         )
         X_val_df, y_val, A_val = load_folktables(
             task=data_cfg["task"],
@@ -133,6 +196,7 @@ def run_benchmark(config_path: str):
             sensitive_attribute=data_cfg["sensitive_attribute"],
             max_samples=max_samples,
             random_state=sample_seed + 1,
+            keep_sensitive_cols=True,
         )
         X_test_df, y_test, A_test = load_folktables(
             task=data_cfg["task"],
@@ -141,6 +205,7 @@ def run_benchmark(config_path: str):
             sensitive_attribute=data_cfg["sensitive_attribute"],
             max_samples=max_samples,
             random_state=sample_seed + 2,
+            keep_sensitive_cols=True,
         )
 
         test_by_year, base_columns = load_folktables_by_period(
@@ -151,6 +216,17 @@ def run_benchmark(config_path: str):
             frequency=frequency,
             max_samples_per_year=max_samples_per_year,
             random_state=sample_seed + 3,
+        )
+
+        # Calculate progress steps
+        num_periods = len(test_by_year)
+        num_methods = len(methods)
+        num_seeds = len(seeds)
+        progress_total = ProgressCalculator.calculate_validation_steps(
+            num_seeds=num_seeds,
+            num_methods=num_methods,
+            num_periods=num_periods,
+            maintenance_strategies=maintenance_strategies,
         )
 
         X_val_df = X_val_df.reindex(columns=base_columns, fill_value=0)
@@ -176,7 +252,14 @@ def run_benchmark(config_path: str):
             sensitive_attribute=data_cfg["sensitive_attribute"],
             max_samples=max_samples,
             random_state=sample_seed,
+            keep_sensitive_cols=True,
         )
+        progress_total = ProgressCalculator.calculate_static_steps(
+            num_seeds=len(seeds),
+            num_methods=len(methods),
+        )
+
+    progress = ProgressTracker(progress_total)
 
     results = []
     for seed in seeds:
@@ -184,10 +267,13 @@ def run_benchmark(config_path: str):
             X_train = X_train_df.values
             X_val = X_val_df.values
             X_test = X_test_df.values
+            X_test_df_for_attrs = X_test_df.copy()  # Keep original for attribute extraction
         else:
             X_train, X_val, X_test, y_train, y_val, y_test, A_train, A_val, A_test = stratified_split(
                 X_df.values, y_all, A_all, seed=seed, split=split
             )
+            # For static mode, we need to track X_df indices to match with feature columns
+            X_test_df_for_attrs = X_df.iloc[np.arange(len(X_df) - len(X_test), len(X_df))].reset_index(drop=True)
 
         scaler = StandardScaler()
         X_train = scaler.fit_transform(X_train)
@@ -203,15 +289,34 @@ def run_benchmark(config_path: str):
                 
                 # Test on aggregated test set
                 y_pred, y_proba = _predict_with_method(method, model, thresholds, X_test, A_test)
+                
+                # Compute metrics on primary attribute (SEX in config)
                 metrics = compute_metrics(y_test, y_pred, y_proba, A_test)
                 result_entry = {
                     "seed": seed,
                     "method": method,
+                    "sensitive_attribute": data_cfg["sensitive_attribute"],
                     **metrics
                 }
                 if mode == "temporal":
                     result_entry["maintenance"] = "no-retrain"
                 results.append(result_entry)
+                
+                # Compute metrics on secondary attribute (RAC1P) if available and different from primary
+                if mode == "temporal" and "RAC1P" in X_test_df_for_attrs.columns and data_cfg["sensitive_attribute"] != "RAC1P":
+                    A_race = (X_test_df_for_attrs["RAC1P"] == 1).astype(int)
+                    metrics_race = compute_metrics(y_test, y_pred, y_proba, A_race)
+                    result_entry_race = {
+                        "seed": seed,
+                        "method": method,
+                        "sensitive_attribute": "RAC1P",
+                        **metrics_race
+                    }
+                    if mode == "temporal":
+                        result_entry_race["maintenance"] = "no-retrain"
+                    results.append(result_entry_race)
+                
+                progress.update(f"seed={seed} method={method} test=all")
 
                 # Test on each year
                 if mode == "temporal":
@@ -226,8 +331,24 @@ def run_benchmark(config_path: str):
                             "method": method,
                             "maintenance": "no-retrain",
                             "year": year,
+                            "sensitive_attribute": data_cfg["sensitive_attribute"],
                             **metrics_year,
                         })
+                        
+                        # Secondary attribute on yearly data
+                        if "RAC1P" in X_year.columns and data_cfg["sensitive_attribute"] != "RAC1P":
+                            A_year_race = (X_year["RAC1P"] == 1).astype(int)
+                            metrics_year_race = compute_metrics(y_year, y_year_pred, y_year_proba, A_year_race)
+                            results_by_year.append({
+                                "seed": seed,
+                                "method": method,
+                                "maintenance": "no-retrain",
+                                "year": year,
+                                "sensitive_attribute": "RAC1P",
+                                **metrics_year_race,
+                            })
+                        
+                        progress.update(f"seed={seed} method={method} year={year} no-retrain")
 
         # === RETRAIN SCENARIO ===
         if "retrain" in maintenance_strategies and mode == "temporal":
@@ -247,6 +368,7 @@ def run_benchmark(config_path: str):
                     sensitive_attribute=data_cfg["sensitive_attribute"],
                     max_samples=max_samples,
                     random_state=int(sample_seed + 5 + test_year),
+                    keep_sensitive_cols=True,
                 )
                 X_retrain_df = X_retrain_df.reindex(columns=base_columns, fill_value=0)
                 
@@ -261,6 +383,7 @@ def run_benchmark(config_path: str):
                     sensitive_attribute=data_cfg["sensitive_attribute"],
                     max_samples=max_samples,
                     random_state=int(sample_seed + 6 + test_year),
+                    keep_sensitive_cols=True,
                 )
                 X_val_retrain_df = X_val_retrain_df.reindex(columns=base_columns, fill_value=0)
                 
@@ -288,8 +411,24 @@ def run_benchmark(config_path: str):
                         "method": method,
                         "maintenance": "retrain",
                         "year": test_year,
+                        "sensitive_attribute": data_cfg["sensitive_attribute"],
                         **metrics_year,
                     })
+                    
+                    # Secondary attribute on yearly data
+                    if "RAC1P" in X_year.columns and data_cfg["sensitive_attribute"] != "RAC1P":
+                        A_year_race = (X_year["RAC1P"] == 1).astype(int)
+                        metrics_year_race = compute_metrics(y_year, y_year_pred, y_year_proba, A_year_race)
+                        results_by_year.append({
+                            "seed": seed,
+                            "method": method,
+                            "maintenance": "retrain",
+                            "year": test_year,
+                            "sensitive_attribute": "RAC1P",
+                            **metrics_year_race,
+                        })
+                    
+                    progress.update(f"seed={seed} method={method} year={test_year} retrain")
 
     results_df = pd.DataFrame(results)
     results_path = output_dir / "benchmark_results.csv"
@@ -376,9 +515,15 @@ def run_benchmark(config_path: str):
     with open(meta_path, "w") as f:
         json.dump(meta, f, indent=2)
 
+    progress.close()
+
+    # Generate initial performance table for paper
+    _generate_initial_performance_table(summary_ci, data_cfg.get("task", "income"), output_dir)
+
     print("✓ Benchmark complete")
     print(f"  Results: {results_path}")
     print(f"  Summary: {summary_path}")
     print(f"  Summary with CI: {summary_ci_path}")
     if len(results_df["method"].unique()) > 1:
         print(f"  Statistical tests: {tests_path}")
+    print(f"  Initial performance table: {output_dir / 'initial_performance.tex'}")
