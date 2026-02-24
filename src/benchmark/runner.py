@@ -1,6 +1,7 @@
 """Benchmark runner implementation (static and temporal)."""
 
 import json
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -24,6 +25,7 @@ from src.benchmark.methods import (
 )
 from src.benchmark.metrics import compute_metrics
 from src.benchmark.tables.initial_performance import _format_ci
+from src.benchmark.tables.summary_by_attribute import generate_summary_tables_by_attribute
 from src.benchmark.data import extract_sensitive_attribute, extract_multiple_sensitive_attributes
 from src.benchmark.reporting import (
     flatten_summary_columns,
@@ -143,6 +145,7 @@ def _predict_with_method(method, model, thresholds, X_test, A_test):
 
 
 def run_benchmark(config_path: str):
+    start_time = time.perf_counter()
     with open(config_path, "r") as f:
         config = yaml.safe_load(f)
 
@@ -295,6 +298,7 @@ def run_benchmark(config_path: str):
                 result_entry = {
                     "seed": seed,
                     "method": method,
+                    "task": data_cfg["task"],
                     "sensitive_attribute": data_cfg["sensitive_attribute"],
                     **metrics
                 }
@@ -309,6 +313,7 @@ def run_benchmark(config_path: str):
                     result_entry_race = {
                         "seed": seed,
                         "method": method,
+                        "task": data_cfg["task"],
                         "sensitive_attribute": "RAC1P",
                         **metrics_race
                     }
@@ -329,6 +334,7 @@ def run_benchmark(config_path: str):
                         results_by_year.append({
                             "seed": seed,
                             "method": method,
+                            "task": data_cfg["task"],
                             "maintenance": "no-retrain",
                             "year": year,
                             "sensitive_attribute": data_cfg["sensitive_attribute"],
@@ -342,6 +348,7 @@ def run_benchmark(config_path: str):
                             results_by_year.append({
                                 "seed": seed,
                                 "method": method,
+                                "task": data_cfg["task"],
                                 "maintenance": "no-retrain",
                                 "year": year,
                                 "sensitive_attribute": "RAC1P",
@@ -409,6 +416,7 @@ def run_benchmark(config_path: str):
                     results_by_year.append({
                         "seed": seed,
                         "method": method,
+                        "task": data_cfg["task"],
                         "maintenance": "retrain",
                         "year": test_year,
                         "sensitive_attribute": data_cfg["sensitive_attribute"],
@@ -422,6 +430,7 @@ def run_benchmark(config_path: str):
                         results_by_year.append({
                             "seed": seed,
                             "method": method,
+                            "task": data_cfg["task"],
                             "maintenance": "retrain",
                             "year": test_year,
                             "sensitive_attribute": "RAC1P",
@@ -435,14 +444,17 @@ def run_benchmark(config_path: str):
     results_df.to_csv(results_path, index=False)
 
     # Summary with mean, std, and 95% CI
-    # For temporal mode with maintenance column, group by method+maintenance
+    # For temporal mode with maintenance column, group by method+maintenance+task+sensitive_attribute
     if mode == "temporal" and "maintenance" in results_df.columns:
-        summary_ci = compute_confidence_intervals(results_df, ci=0.95, group_by=["method", "maintenance"])
+        summary_ci = compute_confidence_intervals(results_df, ci=0.95, group_by=["method", "maintenance", "task", "sensitive_attribute"])
     else:
-        summary_ci = compute_confidence_intervals(results_df, ci=0.95)
+        summary_ci = compute_confidence_intervals(results_df, ci=0.95, group_by=["method", "task", "sensitive_attribute"])
     
     summary_ci_path = output_dir / "benchmark_summary_ci.csv"
     summary_ci.to_csv(summary_ci_path, index=False)
+    
+    # Generate attribute-specific summary tables (SEX, RAC1P, etc)
+    generate_summary_tables_by_attribute(summary_ci, output_dir)
     
     # Statistical tests vs baseline
     if len(results_df["method"].unique()) > 1:
@@ -491,12 +503,14 @@ def run_benchmark(config_path: str):
         plot_temporal_comparison_by_year(results_by_year_df, output_dir)
         plot_original_vs_updated(results_by_year_df, output_dir)
 
+    elapsed_seconds = time.perf_counter() - start_time
     meta = {
         "experiment": exp_cfg["name"],
         "methods": methods,
         "seeds": seeds,
         "results": str(results_path),
         "summary": str(summary_path),
+        "elapsed_seconds": round(elapsed_seconds, 2),
     }
 
     if compare_outputs:
@@ -520,6 +534,7 @@ def run_benchmark(config_path: str):
     # Generate initial performance table for paper
     _generate_initial_performance_table(summary_ci, data_cfg.get("task", "income"), output_dir)
 
+    elapsed_minutes = elapsed_seconds / 60
     print("✓ Benchmark complete")
     print(f"  Results: {results_path}")
     print(f"  Summary: {summary_path}")
@@ -527,3 +542,4 @@ def run_benchmark(config_path: str):
     if len(results_df["method"].unique()) > 1:
         print(f"  Statistical tests: {tests_path}")
     print(f"  Initial performance table: {output_dir / 'initial_performance.tex'}")
+    print(f"  Elapsed time: {elapsed_minutes:.1f} min ({elapsed_seconds:.1f} s)")
