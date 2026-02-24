@@ -18,6 +18,9 @@ Thumbs.db
 data/
 results/
 mlruns/
+paper/*
+!paper/paper.tex
+!paper/paper.pdf
 
 # Logs
 *.log
