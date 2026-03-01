@@ -3,6 +3,8 @@
 from pathlib import Path
 import pandas as pd
 
+from src.benchmark.metrics import METRIC_NAMES, METRIC_LABELS
+
 
 def _format_ci(row: pd.Series, metric: str) -> str:
     """Format metric with confidence interval."""
@@ -111,13 +113,10 @@ def generate_summary_tables_by_attribute(summary_ci: pd.DataFrame, output_dir: P
     
     output_dir.mkdir(parents=True, exist_ok=True)
     
-    metrics = ["eo_gap", "dp_gap", "accuracy", "auc"]
-    metric_labels = {
-        "eo_gap": "EO Gap",
-        "dp_gap": "DP Gap",
-        "accuracy": "Accuracy",
-        "auc": "AUC"
-    }
+    metrics = [metric for metric in METRIC_NAMES if f"{metric}_mean" in summary_ci.columns]
+    if not metrics:
+        print("⚠ Warning: No metric columns found in summary_ci. Skipping attribute-specific tables.")
+        return
     
     # Check if task column exists
     has_task = "task" in summary_ci.columns
@@ -144,7 +143,7 @@ def generate_summary_tables_by_attribute(summary_ci: pd.DataFrame, output_dir: P
             has_maintenance = "maintenance" in attr_data.columns
             
             for metric in metrics:
-                row = {"Metric": metric_labels.get(metric, metric)}
+                row = {"Metric": METRIC_LABELS.get(metric, metric.replace("_", " ").title())}
                 
                 # Get all methods for this task+attribute combination
                 for method in sorted(attr_data["method"].unique()):

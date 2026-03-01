@@ -8,6 +8,8 @@ import pandas as pd
 import seaborn as sns
 from scipy import stats
 
+from src.benchmark.metrics import METRIC_NAMES, METRIC_LABELS
+
 
 def _apply_paper_style():
     """Apply a clean, paper-like plotting style."""
@@ -72,6 +74,29 @@ def flatten_summary_columns(summary_df: pd.DataFrame) -> pd.DataFrame:
             columns.append(col)
     summary_df.columns = columns
     return summary_df
+
+
+def _available_summary_metrics(summary_ci: pd.DataFrame) -> list[str]:
+    """Get metrics available in summary CI table, preserving registry order."""
+    metrics = [metric for metric in METRIC_NAMES if f"{metric}_mean" in summary_ci.columns]
+    if metrics:
+        return metrics
+
+    detected = []
+    for col in summary_ci.columns:
+        if col.endswith("_mean"):
+            detected.append(col[:-5])
+    return sorted(set(detected))
+
+
+def _available_results_metrics(results_df: pd.DataFrame) -> list[str]:
+    """Get numeric metrics available in raw yearly results, preserving registry order."""
+    metrics = [metric for metric in METRIC_NAMES if metric in results_df.columns]
+    if metrics:
+        return metrics
+
+    numeric_cols = results_df.select_dtypes(include=[np.number]).columns
+    return [col for col in numeric_cols if col not in ["seed", "year"]]
 
 
 def compute_confidence_intervals(results_df: pd.DataFrame, ci=0.95, group_by=None) -> pd.DataFrame:
@@ -149,10 +174,14 @@ def plot_static_comparison(summary_ci: pd.DataFrame, output_dir: Path):
     _apply_paper_style()
     output_dir.mkdir(parents=True, exist_ok=True)
     
-    metrics = ['dp_gap', 'eo_gap', 'accuracy', 'auc']
-    
-    fig, axes = plt.subplots(2, 2, figsize=(14, 10), dpi=300)
-    axes = axes.flatten()
+    metrics = _available_summary_metrics(summary_ci)
+    if not metrics:
+        return
+
+    n_cols = 2 if len(metrics) > 1 else 1
+    n_rows = int(np.ceil(len(metrics) / n_cols))
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(7 * n_cols, 4.5 * n_rows), dpi=300)
+    axes = np.atleast_1d(axes).flatten()
     
     colors = sns.color_palette("muted", n_colors=len(summary_ci))
     
@@ -185,9 +214,13 @@ def plot_static_comparison(summary_ci: pd.DataFrame, output_dir: Path):
         ax.set_xticks(x_pos)
         ax.set_xticklabels([m.replace('_', ' ').title() for m in summary_ci['method']], 
                            rotation=45, ha='right')
-        ax.set_ylabel(metric.upper())
-        ax.set_title(f"{metric.upper()} by Method")
+        metric_label = METRIC_LABELS.get(metric, metric.replace("_", " ").title())
+        ax.set_ylabel(metric_label)
+        ax.set_title(f"{metric_label} by Method")
         ax.grid(True, axis="y")
+
+    for ax in axes[len(metrics):]:
+        ax.remove()
     
     plt.tight_layout()
     plot_path = output_dir / "static_comparison.png"
@@ -201,7 +234,9 @@ def plot_temporal_comparison_by_year(results_by_year_df: pd.DataFrame, output_di
     _apply_paper_style()
     output_dir.mkdir(parents=True, exist_ok=True)
     
-    metrics = ['dp_gap', 'eo_gap', 'accuracy', 'auc']
+    metrics = _available_results_metrics(results_by_year_df)
+    if not metrics:
+        return
     
     for metric in metrics:
         fig, ax = plt.subplots(figsize=(9, 5), dpi=300)
@@ -227,8 +262,9 @@ def plot_temporal_comparison_by_year(results_by_year_df: pd.DataFrame, output_di
             ax.fill_between(years, means - cis, means + cis, color=colors[idx], alpha=0.15)
         
         _apply_period_ticks(ax, years, label="Year")
-        ax.set_ylabel(metric.upper())
-        ax.set_title(f"Temporal {metric.upper()} by Method (95% CI)")
+        metric_label = METRIC_LABELS.get(metric, metric.replace("_", " ").title())
+        ax.set_ylabel(metric_label)
+        ax.set_title(f"Temporal {metric_label} by Method (95% CI)")
         ax.legend(fontsize=9, ncol=2, loc="upper center", bbox_to_anchor=(0.5, -0.18))
         ax.grid(True)
         
@@ -243,7 +279,9 @@ def plot_temporal_metrics(results_by_year_df: pd.DataFrame, output_dir: Path):
     """Plot temporal metrics aggregated by year (legacy function)."""
     _apply_paper_style()
     output_dir.mkdir(parents=True, exist_ok=True)
-    metrics = ["dp_gap", "eo_gap", "accuracy", "auc"]
+    metrics = _available_results_metrics(results_by_year_df)
+    if not metrics:
+        return
 
     for metric in metrics:
         pivot = (
@@ -258,8 +296,9 @@ def plot_temporal_metrics(results_by_year_df: pd.DataFrame, output_dir: Path):
             ax.plot(data_m["year"], data_m[metric], linewidth=2, label=method)
 
         _apply_period_ticks(ax, data_m["year"].tolist(), label="Year")
-        ax.set_ylabel(metric)
-        ax.set_title(f"Temporal {metric} by year")
+        metric_label = METRIC_LABELS.get(metric, metric.replace("_", " ").title())
+        ax.set_ylabel(metric_label)
+        ax.set_title(f"Temporal {metric_label} by year")
         ax.grid(True, alpha=0.3, linestyle="--")
         ax.legend()
         fig.tight_layout()
@@ -281,9 +320,14 @@ def plot_original_vs_updated(results_by_year_df, output_dir):
     if len(maintenance_opts) < 2:
         return
     
-    metrics = ["dp_gap", "eo_gap", "accuracy", "auc"]
-    fig, axes = plt.subplots(2, 2, figsize=(14, 10), dpi=200)
-    axes = axes.flatten()
+    metrics = _available_results_metrics(results_by_year_df)
+    if not metrics:
+        return
+
+    n_cols = 2 if len(metrics) > 1 else 1
+    n_rows = int(np.ceil(len(metrics) / n_cols))
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(7 * n_cols, 4.5 * n_rows), dpi=200)
+    axes = np.atleast_1d(axes).flatten()
     
     colors = {"no-retrain": "#6E6E6E", "retrain": "#2C7FB8"}
     years_sorted = sorted(results_by_year_df["year"].unique())
@@ -324,10 +368,14 @@ def plot_original_vs_updated(results_by_year_df, output_dir):
                 )
 
         _apply_period_ticks(ax, years, label="Year")
-        ax.set_ylabel(metric.replace("_", " ").title())
-        ax.set_title(f"{metric.replace('_', ' ').title()}")
+        metric_label = METRIC_LABELS.get(metric, metric.replace("_", " ").title())
+        ax.set_ylabel(metric_label)
+        ax.set_title(metric_label)
         ax.grid(True)
         ax.legend(fontsize=9, ncol=1, loc="upper center", bbox_to_anchor=(0.5, -0.18))
+
+    for ax in axes[len(metrics):]:
+        ax.remove()
     
     fig.suptitle("Original vs Updated Models", y=1.02)
     fig.tight_layout()

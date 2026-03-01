@@ -21,7 +21,7 @@ mlruns/
 paper/*
 !paper/paper.tex
 !paper/paper.pdf
-
+plots examples/
 # Logs
 *.log
 *.out
