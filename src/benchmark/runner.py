@@ -23,7 +23,7 @@ from src.benchmark.methods import (
     choose_thresholds_equalized_odds,
     train_with_lagrangian,
 )
-from src.benchmark.metrics import compute_metrics
+from src.benchmark.metrics import compute_metrics, METRIC_NAMES, METRIC_LABELS
 from src.benchmark.tables.initial_performance import _format_ci
 from src.benchmark.tables.summary_by_attribute import generate_summary_tables_by_attribute
 from src.benchmark.data import extract_sensitive_attribute, extract_multiple_sensitive_attributes
@@ -40,17 +40,13 @@ from src.benchmark.reporting import (
 
 def _generate_initial_performance_table(summary_ci: pd.DataFrame, task: str, output_dir: Path):
     """Generate initial performance table (metrics by method with CI) for paper."""
-    metrics = ["dp_gap", "eo_gap", "accuracy", "auc"]
-    metric_labels = {
-        "dp_gap": "DP Gap",
-        "eo_gap": "EO Gap",
-        "accuracy": "Accuracy",
-        "auc": "AUC"
-    }
+    metrics = [metric for metric in METRIC_NAMES if f"{metric}_mean" in summary_ci.columns]
+    if not metrics:
+        return
     
     rows = []
     for metric in metrics:
-        row = {"Metric": metric_labels[metric]}
+        row = {"Metric": METRIC_LABELS.get(metric, metric.replace("_", " ").title())}
         
         for method in summary_ci["method"].unique():
             method_data = summary_ci[summary_ci["method"] == method]

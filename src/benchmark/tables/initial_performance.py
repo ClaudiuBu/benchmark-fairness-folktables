@@ -5,6 +5,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from src.benchmark.metrics import METRIC_NAMES, METRIC_LABELS
+
 
 def _format_ci(row: pd.Series, metric: str) -> str:
     """Format metric_mean [metric_ci_lower - metric_ci_upper]."""
@@ -38,17 +40,14 @@ def generate_initial_performance_tables(results_path: str, output_dir: Path) -> 
     rows_income = []
     rows_employment = []
     
-    metrics = ["dp_gap", "eo_gap", "accuracy", "auc"]
-    metric_labels = {
-        "dp_gap": "DP Gap",
-        "eo_gap": "EO Gap",
-        "accuracy": "Accuracy",
-        "auc": "AUC"
-    }
+    metrics = [metric for metric in METRIC_NAMES if f"{metric}_mean" in df.columns]
+    if not metrics:
+        return (output_dir / "initial_performance_income.tex", output_dir / "initial_performance_employment.tex")
     
     for metric in metrics:
-        row_income = {"Metric": metric_labels[metric]}
-        row_employment = {"Metric": metric_labels[metric]}
+        label = METRIC_LABELS.get(metric, metric.replace("_", " ").title())
+        row_income = {"Metric": label}
+        row_employment = {"Metric": label}
         
         for method in ["baseline", "reweighing", "equalized_odds", "fairness_constraint"]:
             method_data = df[df["method"] == method]

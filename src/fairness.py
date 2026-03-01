@@ -54,3 +54,36 @@ def equalized_odds_gap(y_true, y_pred, A):
     tpr1, fpr1 = _rates(mask1)
 
     return max(abs(tpr1 - tpr0), abs(fpr1 - fpr0))
+
+
+def observed_expected_gap(y_true, y_proba, A):
+    """Observed/Expected gap between groups: O/E(A=1) - O/E(A=0).
+
+    O/E for a group is defined as sum(y_true) / sum(y_proba).
+    Returns np.nan when any group's expected count is zero or a group is missing.
+    """
+    A = np.asarray(A)
+    y_true = np.asarray(y_true)
+    y_proba = np.asarray(y_proba)
+
+    def _oe_ratio(mask):
+        y_true_g = y_true[mask]
+        y_proba_g = y_proba[mask]
+        expected = np.sum(y_proba_g)
+        if expected <= 0:
+            return np.nan
+        return float(np.sum(y_true_g) / expected)
+
+    mask0 = A == 0
+    mask1 = A == 1
+
+    if not np.any(mask0) or not np.any(mask1):
+        return np.nan
+
+    oe0 = _oe_ratio(mask0)
+    oe1 = _oe_ratio(mask1)
+    if np.isnan(oe0) or np.isnan(oe1):
+        return np.nan
+
+    return float(oe1 - oe0)
+
