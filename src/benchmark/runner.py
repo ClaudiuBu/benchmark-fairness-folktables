@@ -13,7 +13,6 @@ from sklearn.preprocessing import StandardScaler
 from src.benchmark.progress import ProgressTracker, ProgressCalculator
 from src.benchmark.data import (
     load_folktables,
-    load_folktables_by_year,
     load_folktables_by_period,
     stratified_split,
 )
@@ -26,7 +25,6 @@ from src.benchmark.methods import (
 from src.benchmark.metrics import compute_metrics, METRIC_NAMES, METRIC_LABELS
 from src.benchmark.tables.initial_performance import _format_ci
 from src.benchmark.tables.summary_by_attribute import generate_summary_tables_by_attribute
-from src.benchmark.data import extract_sensitive_attribute, extract_multiple_sensitive_attributes
 from src.benchmark.reporting import (
     flatten_summary_columns,
     plot_temporal_metrics,
@@ -38,18 +36,36 @@ from src.benchmark.reporting import (
 )
 
 
-def _generate_initial_performance_table(summary_ci: pd.DataFrame, task: str, output_dir: Path):
+def _generate_initial_performance_table(
+    summary_ci: pd.DataFrame,
+    task: str,
+    output_dir: Path,
+    maintenance: str | None = None,
+    sensitive_attribute: str | None = None,
+):
     """Generate initial performance table (metrics by method with CI) for paper."""
+    table_source = summary_ci.copy()
+    if "task" in table_source.columns:
+        table_source = table_source[table_source["task"] == task]
+    if maintenance is not None and "maintenance" in table_source.columns:
+        table_source = table_source[table_source["maintenance"] == maintenance]
+    if sensitive_attribute is not None and "sensitive_attribute" in table_source.columns:
+        table_source = table_source[table_source["sensitive_attribute"] == sensitive_attribute]
+
+    if table_source.empty:
+        return None
+
     metrics = [metric for metric in METRIC_NAMES if f"{metric}_mean" in summary_ci.columns]
     if not metrics:
-        return
+        return None
     
     rows = []
+    methods_sorted = sorted(table_source["method"].unique())
     for metric in metrics:
         row = {"Metric": METRIC_LABELS.get(metric, metric.replace("_", " ").title())}
         
-        for method in summary_ci["method"].unique():
-            method_data = summary_ci[summary_ci["method"] == method]
+        for method in methods_sorted:
+            method_data = table_source[table_source["method"] == method]
             
             if not method_data.empty:
                 val = _format_ci(method_data.iloc[0], metric)
@@ -67,30 +83,7 @@ def _generate_initial_performance_table(summary_ci: pd.DataFrame, task: str, out
     latex_table = table_df.to_latex(index=False, escape=False)
     table_path = output_dir / f"initial_performance_{task}.tex"
     table_path.write_text(latex_table)
-
-
-def _compute_metrics_all_attributes(y_true, y_pred, y_proba, X_test: pd.DataFrame) -> list:
-    """Compute metrics for all available sensitive attributes (SEX, RAC1P).
-    
-    Returns list of dicts with 'sensitive_attribute' column added.
-    """
-    results = []
-    
-    # Attribute 1: SEX
-    if "SEX" in X_test.columns:
-        A_sex = (X_test["SEX"] == 1).astype(int)
-        metrics_sex = compute_metrics(y_true, y_pred, y_proba, A_sex)
-        metrics_sex["sensitive_attribute"] = "SEX"
-        results.append(metrics_sex)
-    
-    # Attribute 2: RAC1P (binary: 1=White, 0=Non-White)
-    if "RAC1P" in X_test.columns:
-        A_race = (X_test["RAC1P"] == 1).astype(int)
-        metrics_race = compute_metrics(y_true, y_pred, y_proba, A_race)
-        metrics_race["sensitive_attribute"] = "RAC1P"
-        results.append(metrics_race)
-    
-    return results
+    return table_path
 
 
 def _train_method_on_data(method, X_train, y_train, A_train, X_val, y_val, A_val, seed, threshold_grid, config):
@@ -177,72 +170,117 @@ def run_benchmark(config_path: str):
         val_years = data_cfg["val_years"]
         test_years = data_cfg["test_years"]
         frequency = data_cfg.get("frequency", "year")
+        
+        # Check if model development is from same year (70/10/20 split)
+        same_year_split = train_years == val_years
 
-        # Load training data (once, used for no-retrain)
-        X_train_df, y_train, A_train = load_folktables(
-            task=data_cfg["task"],
-            states=data_cfg["states"],
-            years=train_years,
-            sensitive_attribute=data_cfg["sensitive_attribute"],
-            max_samples=max_samples,
-            random_state=sample_seed,
-            keep_sensitive_cols=True,
-        )
-        X_val_df, y_val, A_val = load_folktables(
-            task=data_cfg["task"],
-            states=data_cfg["states"],
-            years=val_years,
-            sensitive_attribute=data_cfg["sensitive_attribute"],
-            max_samples=max_samples,
-            random_state=sample_seed + 1,
-            keep_sensitive_cols=True,
-        )
-        X_test_df, y_test, A_test = load_folktables(
-            task=data_cfg["task"],
-            states=data_cfg["states"],
-            years=test_years,
-            sensitive_attribute=data_cfg["sensitive_attribute"],
-            max_samples=max_samples,
-            random_state=sample_seed + 2,
-            keep_sensitive_cols=True,
-        )
+        if same_year_split:
+            # Load pooled data and apply 70/10/20 split
+            X_pool_df, y_pool, A_pool = load_folktables(
+                task=data_cfg["task"],
+                states=data_cfg["states"],
+                years=train_years,
+                sensitive_attribute=data_cfg["sensitive_attribute"],
+                max_samples=max_samples,
+                random_state=sample_seed,
+                keep_sensitive_cols=True,
+            )
+            # Apply stratified 70/10/20 split for model development
+            split_ratio = [0.7, 0.1, 0.2]  # train, val, test
+            X_train, X_val, X_test_dev, y_train, y_val, y_test_dev, A_train, A_val, A_test_dev = stratified_split(
+                X_pool_df.values, y_pool, A_pool, seed=sample_seed, split=split_ratio
+            )
+            # Convert back to DataFrames for consistency
+            X_train_df = pd.DataFrame(X_train, columns=X_pool_df.columns)
+            X_val_df = pd.DataFrame(X_val, columns=X_pool_df.columns)
+            X_test_dev_df = pd.DataFrame(X_test_dev, columns=X_pool_df.columns)
+        else:
+            # Load training data separately (when years differ)
+            X_train_df, y_train, A_train = load_folktables(
+                task=data_cfg["task"],
+                states=data_cfg["states"],
+                years=train_years,
+                sensitive_attribute=data_cfg["sensitive_attribute"],
+                max_samples=max_samples,
+                random_state=sample_seed,
+                keep_sensitive_cols=True,
+            )
+            X_val_df, y_val, A_val = load_folktables(
+                task=data_cfg["task"],
+                states=data_cfg["states"],
+                years=val_years,
+                sensitive_attribute=data_cfg["sensitive_attribute"],
+                max_samples=max_samples,
+                random_state=sample_seed + 1,
+                keep_sensitive_cols=True,
+            )
+        
+        # Load temporal test data (only years after development year)
+        if same_year_split:
+            # Exclude development year from temporal test years
+            temporal_test_years = sorted([y for y in test_years if y not in train_years])
+        else:
+            temporal_test_years = sorted(test_years)
+            X_test_dev_df, y_test_dev, A_test_dev = None, None, None
+        
+        if temporal_test_years:
+            X_test_df, y_test, A_test = load_folktables(
+                task=data_cfg["task"],
+                states=data_cfg["states"],
+                years=temporal_test_years,
+                sensitive_attribute=data_cfg["sensitive_attribute"],
+                max_samples=max_samples,
+                random_state=sample_seed + 2,
+                keep_sensitive_cols=True,
+            )
+        else:
+            # No temporal years beyond development year (unlikely but handle it)
+            X_test_df, y_test, A_test = X_test_dev_df, y_test_dev, A_test_dev
 
         test_by_year, base_columns = load_folktables_by_period(
             task=data_cfg["task"],
             states=data_cfg["states"],
-            years=test_years,
+            years=temporal_test_years,  # Use temporal years only (exclude development year)
             sensitive_attribute=data_cfg["sensitive_attribute"],
             frequency=frequency,
             max_samples_per_year=max_samples_per_year,
             random_state=sample_seed + 3,
         )
 
+        # If no temporal years are loaded, infer base columns from development data
+        if base_columns is None:
+            base_columns = X_train_df.columns
+
+        X_val_df = X_val_df.reindex(columns=base_columns, fill_value=0)
+        X_train_df = X_train_df.reindex(columns=base_columns, fill_value=0)
+
+        if X_test_dev_df is not None:
+            X_test_dev_df = X_test_dev_df.reindex(columns=base_columns, fill_value=0)
+
+        X_test_df = X_test_df.reindex(columns=base_columns, fill_value=0)
+
+        # (Development year test split kept separate, not included in temporal evaluation)
+
         # Calculate progress steps
         num_periods = len(test_by_year)
         num_methods = len(methods)
         num_seeds = len(seeds)
-        progress_total = ProgressCalculator.calculate_validation_steps(
-            num_seeds=num_seeds,
-            num_methods=num_methods,
-            num_periods=num_periods,
-            maintenance_strategies=maintenance_strategies,
-        )
+        development_year_cutoff = max(int(y) for y in (list(train_years) + list(val_years)))
+        retrain_test_periods = [
+            period
+            for period in sorted(test_by_year.keys())
+            if int(np.floor(period)) > development_year_cutoff
+        ]
+        # Both no-retrain and retrain evaluate on the same temporal periods (excluding development year)
+        summary_test_periods = sorted(test_by_year.keys())
+        summary_test_periods_set = set(summary_test_periods)
 
-        X_val_df = X_val_df.reindex(columns=base_columns, fill_value=0)
-        X_test_df = X_test_df.reindex(columns=base_columns, fill_value=0)
-        X_train_df = X_train_df.reindex(columns=base_columns, fill_value=0)
-        
-        # For retrain: also load training data by year
-        retrain_by_year = None
+        progress_total = 0
+        if "no-retrain" in maintenance_strategies:
+            progress_total += num_seeds * num_methods  # aggregated test
+            progress_total += num_seeds * num_methods * num_periods  # per-period tests
         if "retrain" in maintenance_strategies:
-            retrain_by_year, _ = load_folktables_by_year(
-                task=data_cfg["task"],
-                states=data_cfg["states"],
-                years=train_years,
-                sensitive_attribute=data_cfg["sensitive_attribute"],
-                max_samples_per_year=max_samples_per_year,
-                random_state=sample_seed + 4,
-            )
+            progress_total += num_seeds * num_methods * len(retrain_test_periods)
     else:
         X_df, y_all, A_all = load_folktables(
             task=data_cfg["task"],
@@ -298,9 +336,11 @@ def run_benchmark(config_path: str):
                     "sensitive_attribute": data_cfg["sensitive_attribute"],
                     **metrics
                 }
-                if mode == "temporal":
-                    result_entry["maintenance"] = "no-retrain"
-                results.append(result_entry)
+                if mode != "temporal":
+                    results.append(result_entry)
+
+                temporal_primary_metrics = []
+                temporal_race_metrics = []
                 
                 # Compute metrics on secondary attribute (RAC1P) if available and different from primary
                 if mode == "temporal" and "RAC1P" in X_test_df_for_attrs.columns and data_cfg["sensitive_attribute"] != "RAC1P":
@@ -313,9 +353,8 @@ def run_benchmark(config_path: str):
                         "sensitive_attribute": "RAC1P",
                         **metrics_race
                     }
-                    if mode == "temporal":
-                        result_entry_race["maintenance"] = "no-retrain"
-                    results.append(result_entry_race)
+                    if mode != "temporal":
+                        results.append(result_entry_race)
                 
                 progress.update(f"seed={seed} method={method} test=all")
 
@@ -336,6 +375,9 @@ def run_benchmark(config_path: str):
                             "sensitive_attribute": data_cfg["sensitive_attribute"],
                             **metrics_year,
                         })
+
+                        if year in summary_test_periods_set:
+                            temporal_primary_metrics.append(metrics_year)
                         
                         # Secondary attribute on yearly data
                         if "RAC1P" in X_year.columns and data_cfg["sensitive_attribute"] != "RAC1P":
@@ -350,90 +392,171 @@ def run_benchmark(config_path: str):
                                 "sensitive_attribute": "RAC1P",
                                 **metrics_year_race,
                             })
+
+                            if year in summary_test_periods_set:
+                                temporal_race_metrics.append(metrics_year_race)
                         
                         progress.update(f"seed={seed} method={method} year={year} no-retrain")
 
+                    if temporal_primary_metrics:
+                        metric_names = temporal_primary_metrics[0].keys()
+                        aggregated_primary_metrics = {
+                            metric_name: float(np.mean([metrics_row[metric_name] for metrics_row in temporal_primary_metrics]))
+                            for metric_name in metric_names
+                        }
+                        results.append(
+                            {
+                                "seed": seed,
+                                "method": method,
+                                "task": data_cfg["task"],
+                                "maintenance": "no-retrain",
+                                "sensitive_attribute": data_cfg["sensitive_attribute"],
+                                **aggregated_primary_metrics,
+                            }
+                        )
+
+                    if temporal_race_metrics:
+                        metric_names_race = temporal_race_metrics[0].keys()
+                        aggregated_race_metrics = {
+                            metric_name: float(np.mean([metrics_row[metric_name] for metrics_row in temporal_race_metrics]))
+                            for metric_name in metric_names_race
+                        }
+                        results.append(
+                            {
+                                "seed": seed,
+                                "method": method,
+                                "task": data_cfg["task"],
+                                "maintenance": "no-retrain",
+                                "sensitive_attribute": "RAC1P",
+                                **aggregated_race_metrics,
+                            }
+                        )
+
         # === RETRAIN SCENARIO ===
         if "retrain" in maintenance_strategies and mode == "temporal":
-            # For each test year, retrain on all data up to that year
-            sorted_test_years = sorted(test_by_year.keys())
-            for test_year in sorted_test_years:
-                # Train only on years strictly before the test year to avoid leakage
-                history_years = sorted(set(train_years + val_years))
-                train_years_for_retrain = [y for y in history_years if y < test_year]
+            # For each evaluated period, retrain on all historical years strictly before it
+            sorted_test_periods = retrain_test_periods
+            temporal_eval_years = sorted({int(np.floor(p)) for p in sorted_test_periods})
+            retrain_metric_accumulator = {}
+
+            for test_period in sorted_test_periods:
+                eval_year = int(np.floor(test_period))
+
+                # Cumulative training history: base development years + prior temporal years
+                base_train_years = sorted({int(y) for y in train_years})
+                prior_temporal_years = [y for y in temporal_eval_years if y < eval_year]
+                train_years_for_retrain = sorted(set(base_train_years + prior_temporal_years))
                 if not train_years_for_retrain:
-                    train_years_for_retrain = history_years
-                
+                    train_years_for_retrain = base_train_years
+
                 X_retrain_df, y_retrain, A_retrain = load_folktables(
                     task=data_cfg["task"],
                     states=data_cfg["states"],
                     years=train_years_for_retrain,
                     sensitive_attribute=data_cfg["sensitive_attribute"],
                     max_samples=max_samples,
-                    random_state=int(sample_seed + 5 + test_year),
+                    random_state=int(sample_seed + 5 + eval_year),
                     keep_sensitive_cols=True,
                 )
                 X_retrain_df = X_retrain_df.reindex(columns=base_columns, fill_value=0)
-                
-                # Use validation years strictly before the test year
-                val_years_for_retrain = [y for y in val_years if y < test_year]
+
+                # Validation history follows the same cumulative policy, without leakage
+                base_val_years = sorted({int(y) for y in val_years if int(y) < eval_year})
+                val_years_for_retrain = sorted(set(base_val_years + prior_temporal_years))
                 if not val_years_for_retrain:
                     val_years_for_retrain = train_years_for_retrain
+
                 X_val_retrain_df, y_val_retrain, A_val_retrain = load_folktables(
                     task=data_cfg["task"],
                     states=data_cfg["states"],
                     years=val_years_for_retrain,
                     sensitive_attribute=data_cfg["sensitive_attribute"],
                     max_samples=max_samples,
-                    random_state=int(sample_seed + 6 + test_year),
+                    random_state=int(sample_seed + 6 + eval_year),
                     keep_sensitive_cols=True,
                 )
                 X_val_retrain_df = X_val_retrain_df.reindex(columns=base_columns, fill_value=0)
-                
+
                 # Scale retrain data
                 scaler_retrain = StandardScaler()
                 X_retrain = scaler_retrain.fit_transform(X_retrain_df.values)
                 X_val_retrain = scaler_retrain.transform(X_val_retrain_df.values)
-                
+
                 for method in methods:
                     model, thresholds = _train_method_on_data(
-                        method, X_retrain, y_retrain, A_retrain, 
-                        X_val_retrain, y_val_retrain, A_val_retrain, 
-                        seed, threshold_grid, config
+                        method,
+                        X_retrain,
+                        y_retrain,
+                        A_retrain,
+                        X_val_retrain,
+                        y_val_retrain,
+                        A_val_retrain,
+                        seed,
+                        threshold_grid,
+                        config,
                     )
-                    
-                    # Test on current year only
-                    X_year, y_year, A_year = test_by_year[test_year]
+
+                    # Test on current period only
+                    X_year, y_year, A_year = test_by_year[test_period]
                     X_year_scaled = scaler_retrain.transform(X_year.values)
                     y_year_pred, y_year_proba = _predict_with_method(
                         method, model, thresholds, X_year_scaled, A_year
                     )
                     metrics_year = compute_metrics(y_year, y_year_pred, y_year_proba, A_year)
-                    results_by_year.append({
-                        "seed": seed,
-                        "method": method,
-                        "task": data_cfg["task"],
-                        "maintenance": "retrain",
-                        "year": test_year,
-                        "sensitive_attribute": data_cfg["sensitive_attribute"],
-                        **metrics_year,
-                    })
-                    
-                    # Secondary attribute on yearly data
-                    if "RAC1P" in X_year.columns and data_cfg["sensitive_attribute"] != "RAC1P":
-                        A_year_race = (X_year["RAC1P"] == 1).astype(int)
-                        metrics_year_race = compute_metrics(y_year, y_year_pred, y_year_proba, A_year_race)
-                        results_by_year.append({
+                    results_by_year.append(
+                        {
                             "seed": seed,
                             "method": method,
                             "task": data_cfg["task"],
                             "maintenance": "retrain",
-                            "year": test_year,
-                            "sensitive_attribute": "RAC1P",
-                            **metrics_year_race,
-                        })
-                    
-                    progress.update(f"seed={seed} method={method} year={test_year} retrain")
+                            "year": test_period,
+                            "sensitive_attribute": data_cfg["sensitive_attribute"],
+                            **metrics_year,
+                        }
+                    )
+
+                    primary_key = (method, data_cfg["task"], data_cfg["sensitive_attribute"])
+                    retrain_metric_accumulator.setdefault(primary_key, []).append(metrics_year)
+
+                    # Secondary attribute on yearly data
+                    if "RAC1P" in X_year.columns and data_cfg["sensitive_attribute"] != "RAC1P":
+                        A_year_race = (X_year["RAC1P"] == 1).astype(int)
+                        metrics_year_race = compute_metrics(y_year, y_year_pred, y_year_proba, A_year_race)
+                        results_by_year.append(
+                            {
+                                "seed": seed,
+                                "method": method,
+                                "task": data_cfg["task"],
+                                "maintenance": "retrain",
+                                "year": test_period,
+                                "sensitive_attribute": "RAC1P",
+                                **metrics_year_race,
+                            }
+                        )
+                        race_key = (method, data_cfg["task"], "RAC1P")
+                        retrain_metric_accumulator.setdefault(race_key, []).append(metrics_year_race)
+
+                    progress.update(f"seed={seed} method={method} year={test_period} retrain")
+
+            # Aggregate retrain yearly metrics into overall rows used by summary/tables
+            for (method, task, sensitive_attribute), metric_list in retrain_metric_accumulator.items():
+                if not metric_list:
+                    continue
+                metric_names = metric_list[0].keys()
+                aggregated_metrics = {
+                    metric_name: float(np.mean([metrics[metric_name] for metrics in metric_list]))
+                    for metric_name in metric_names
+                }
+                results.append(
+                    {
+                        "seed": seed,
+                        "method": method,
+                        "task": task,
+                        "maintenance": "retrain",
+                        "sensitive_attribute": sensitive_attribute,
+                        **aggregated_metrics,
+                    }
+                )
 
     results_df = pd.DataFrame(results)
     results_path = output_dir / "benchmark_results.csv"
@@ -454,14 +577,17 @@ def run_benchmark(config_path: str):
     
     # Statistical tests vs baseline
     if len(results_df["method"].unique()) > 1:
-        sig_tests = statistical_tests_vs_baseline(results_df)
+        stratify_cols = [
+            col for col in ["maintenance", "task", "sensitive_attribute"] if col in results_df.columns
+        ]
+        sig_tests = statistical_tests_vs_baseline(results_df, stratify_by=stratify_cols)
         tests_path = output_dir / "benchmark_statistical_tests.csv"
         sig_tests.to_csv(tests_path, index=False)
 
     summary_group_cols = ["method"]
     if "maintenance" in results_df.columns:
         summary_group_cols.append("maintenance")
-    numeric_cols = results_df.select_dtypes(include=[np.number]).columns
+    numeric_cols = [col for col in results_df.select_dtypes(include=[np.number]).columns if col not in ["seed", "year"]]
     summary = (
         results_df.groupby(summary_group_cols)[numeric_cols]
         .agg(["mean", "std"])
@@ -485,7 +611,9 @@ def run_benchmark(config_path: str):
         if "maintenance" in results_by_year_df.columns:
             groupby_cols.append("maintenance")
         
-        numeric_year_cols = results_by_year_df.select_dtypes(include=[np.number]).columns
+        numeric_year_cols = [
+            col for col in results_by_year_df.select_dtypes(include=[np.number]).columns if col not in ["seed", "year"]
+        ]
         summary_by_year = (
             results_by_year_df.groupby(groupby_cols, sort=True)[numeric_year_cols]
             .agg(["mean", "std"])
@@ -528,7 +656,33 @@ def run_benchmark(config_path: str):
     progress.close()
 
     # Generate initial performance table for paper
-    _generate_initial_performance_table(summary_ci, data_cfg.get("task", "income"), output_dir)
+    initial_table_path = None
+    if mode == "temporal" and results_by_year:
+        initial_period = min(results_by_year_df["year"])
+        initial_subset = results_by_year_df[results_by_year_df["year"] == initial_period].copy()
+        if "maintenance" in initial_subset.columns:
+            initial_subset = initial_subset[initial_subset["maintenance"] == "no-retrain"]
+        if "task" in initial_subset.columns:
+            initial_subset = initial_subset[initial_subset["task"] == data_cfg.get("task")]
+        if "sensitive_attribute" in initial_subset.columns:
+            initial_subset = initial_subset[initial_subset["sensitive_attribute"] == data_cfg.get("sensitive_attribute")]
+
+        if not initial_subset.empty:
+            initial_summary = compute_confidence_intervals(initial_subset, ci=0.95, group_by=["method"])
+            initial_table_path = _generate_initial_performance_table(
+                initial_summary,
+                data_cfg.get("task", "income"),
+                output_dir,
+            )
+
+    if initial_table_path is None:
+        initial_table_path = _generate_initial_performance_table(
+            summary_ci,
+            data_cfg.get("task", "income"),
+            output_dir,
+            maintenance="no-retrain" if mode == "temporal" else None,
+            sensitive_attribute=data_cfg.get("sensitive_attribute") if mode == "temporal" else None,
+        )
 
     elapsed_minutes = elapsed_seconds / 60
     print("✓ Benchmark complete")
@@ -537,5 +691,6 @@ def run_benchmark(config_path: str):
     print(f"  Summary with CI: {summary_ci_path}")
     if len(results_df["method"].unique()) > 1:
         print(f"  Statistical tests: {tests_path}")
-    print(f"  Initial performance table: {output_dir / 'initial_performance.tex'}")
+    if initial_table_path is not None:
+        print(f"  Initial performance table: {initial_table_path}")
     print(f"  Elapsed time: {elapsed_minutes:.1f} min ({elapsed_seconds:.1f} s)")

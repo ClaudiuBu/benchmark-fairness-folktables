@@ -8,12 +8,14 @@ data:
   states: ["CA"]
   mode: "temporal"
   frequency: "quarter"
+  # Model development: 2014 split into 70% train, 10% val, 20% test
   train_years: [2014]
-  val_years: [2015]
-  test_years: [2015, 2016, 2017, 2018]
+  val_years: [2014]
+  # Initial test on 2014 hold-out set, temporal test on subsequent years
+  test_years: [2014, 2015, 2016, 2017, 2018]
   sensitive_attribute: "SEX"
-  max_samples: 50000
-  max_samples_per_year: 50000
+  max_samples: 150000
+  max_samples_per_year: 150000
 
 methods:
   - baseline
