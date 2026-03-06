@@ -124,47 +124,85 @@ def compute_confidence_intervals(results_df: pd.DataFrame, ci=0.95, group_by=Non
         row = {col: group_vals[i] for i, col in enumerate(group_by)}
         
         for metric in metrics:
-            values = group_data[metric].values
-            if len(values) > 0:
-                mean = np.mean(values)
-                stderr = stats.sem(values)
-                ci_range = stderr * stats.t.ppf((1 + ci) / 2, len(values) - 1)
-                
-                row[f"{metric}_mean"] = mean
-                row[f"{metric}_std"] = np.std(values)
-                row[f"{metric}_ci_lower"] = mean - ci_range
-                row[f"{metric}_ci_upper"] = mean + ci_range
+            values = pd.to_numeric(group_data[metric], errors="coerce").dropna().values
+            if len(values) == 0:
+                continue
+
+            mean = float(np.mean(values))
+            std = float(np.std(values))
+            if len(values) < 2:
+                ci_range = 0.0
+            else:
+                stderr = stats.sem(values, nan_policy="omit")
+                if np.isnan(stderr):
+                    ci_range = 0.0
+                else:
+                    ci_range = float(stderr * stats.t.ppf((1 + ci) / 2, len(values) - 1))
+
+            row[f"{metric}_mean"] = mean
+            row[f"{metric}_std"] = std
+            row[f"{metric}_ci_lower"] = mean - ci_range
+            row[f"{metric}_ci_upper"] = mean + ci_range
         
         summary_data.append(row)
     
     return pd.DataFrame(summary_data)
 
 
-def statistical_tests_vs_baseline(results_df: pd.DataFrame) -> pd.DataFrame:
-    """Run t-tests comparing each method vs baseline."""
+def statistical_tests_vs_baseline(results_df: pd.DataFrame, stratify_by: list[str] | None = None) -> pd.DataFrame:
+    """Run t-tests comparing each method vs baseline, optionally stratified by context columns."""
+    if stratify_by is None:
+        stratify_by = []
+    stratify_by = [col for col in stratify_by if col in results_df.columns]
+
     # Filter for numeric columns only, excluding metadata and string columns
     numeric_cols = results_df.select_dtypes(include=[np.number]).columns
     metrics = [col for col in numeric_cols if col not in ["seed", "year"]]
-    baseline_data = results_df[results_df["method"] == "baseline"]
     
     test_results = []
-    for method in sorted(results_df["method"].unique()):
-        if method == "baseline":
+    if stratify_by:
+        grouped_contexts = results_df.groupby(stratify_by, sort=True)
+        context_iter = [
+            (ctx_vals if isinstance(ctx_vals, tuple) else (ctx_vals,), ctx_df)
+            for ctx_vals, ctx_df in grouped_contexts
+        ]
+    else:
+        context_iter = [(tuple(), results_df)]
+
+    for context_vals, context_df in context_iter:
+        baseline_data = context_df[context_df["method"] == "baseline"]
+        if baseline_data.empty:
             continue
-        
-        method_data = results_df[results_df["method"] == method]
-        row = {"method": method}
-        
-        for metric in metrics:
-            baseline_vals = baseline_data[metric].values
-            method_vals = method_data[metric].values
-            
-            t_stat, p_val = stats.ttest_ind(method_vals, baseline_vals)
-            row[f"{metric}_tstat"] = t_stat
-            row[f"{metric}_pval"] = p_val
-            row[f"{metric}_significant"] = "***" if p_val < 0.001 else ("**" if p_val < 0.01 else ("*" if p_val < 0.05 else ""))
-        
-        test_results.append(row)
+
+        context_dict = {col: context_vals[i] for i, col in enumerate(stratify_by)}
+
+        for method in sorted(context_df["method"].unique()):
+            if method == "baseline":
+                continue
+
+            method_data = context_df[context_df["method"] == method]
+            if method_data.empty:
+                continue
+
+            row = {**context_dict, "method": method}
+
+            for metric in metrics:
+                baseline_vals = pd.to_numeric(baseline_data[metric], errors="coerce").dropna().values
+                method_vals = pd.to_numeric(method_data[metric], errors="coerce").dropna().values
+
+                if len(baseline_vals) < 2 or len(method_vals) < 2:
+                    t_stat, p_val = np.nan, np.nan
+                else:
+                    t_stat, p_val = stats.ttest_ind(method_vals, baseline_vals, equal_var=False, nan_policy="omit")
+
+                row[f"{metric}_tstat"] = t_stat
+                row[f"{metric}_pval"] = p_val
+                if np.isnan(p_val):
+                    row[f"{metric}_significant"] = ""
+                else:
+                    row[f"{metric}_significant"] = "***" if p_val < 0.001 else ("**" if p_val < 0.01 else ("*" if p_val < 0.05 else ""))
+
+            test_results.append(row)
     
     return pd.DataFrame(test_results)
 
@@ -240,28 +278,63 @@ def plot_temporal_comparison_by_year(results_by_year_df: pd.DataFrame, output_di
     
     for metric in metrics:
         fig, ax = plt.subplots(figsize=(9, 5), dpi=300)
-        
-        grouped = results_by_year_df.groupby(['year', 'method'])[metric].agg(['mean', 'std', 'count'])
+
+        group_cols = ["year", "method"]
+        has_maintenance = "maintenance" in results_by_year_df.columns
+        if has_maintenance:
+            group_cols.append("maintenance")
+
+        grouped = results_by_year_df.groupby(group_cols)[metric].agg(['mean', 'std', 'count'])
         grouped['ci'] = 1.96 * grouped['std'] / np.sqrt(grouped['count'])
-        
-        colors = sns.color_palette("muted", n_colors=len(results_by_year_df['method'].unique()))
-        
-        for idx, method in enumerate(sorted(results_by_year_df['method'].unique())):
-            method_data = grouped.loc[grouped.index.get_level_values('method') == method]
-            years = [y for y, _ in method_data.index]
-            means = method_data['mean'].values
-            cis = method_data['ci'].values
-            
-            ax.plot(
-                years,
-                means,
-                linewidth=2.0,
-                label=method.replace('_', ' ').title(),
-                color=colors[idx],
-            )
-            ax.fill_between(years, means - cis, means + cis, color=colors[idx], alpha=0.15)
-        
-        _apply_period_ticks(ax, years, label="Year")
+
+        methods = sorted(results_by_year_df['method'].unique())
+        colors = sns.color_palette("muted", n_colors=len(methods))
+        line_styles = {"no-retrain": "--", "retrain": "-"}
+
+        all_years = sorted(results_by_year_df["year"].unique())
+
+        for idx, method in enumerate(methods):
+            if has_maintenance:
+                maint_opts = sorted(results_by_year_df["maintenance"].dropna().unique())
+                for maintenance in maint_opts:
+                    method_data = grouped[
+                        (grouped.index.get_level_values("method") == method)
+                        & (grouped.index.get_level_values("maintenance") == maintenance)
+                    ]
+                    if method_data.empty:
+                        continue
+                    years = method_data.index.get_level_values("year").to_numpy(dtype=float)
+                    means = method_data['mean'].values
+                    cis = method_data['ci'].values
+
+                    label = f"{method.replace('_', ' ').title()} ({maintenance.replace('-', ' ')})"
+                    ax.plot(
+                        years,
+                        means,
+                        linewidth=2.0,
+                        linestyle=line_styles.get(maintenance, "-"),
+                        label=label,
+                        color=colors[idx],
+                    )
+                    ax.fill_between(years, means - cis, means + cis, color=colors[idx], alpha=0.12)
+            else:
+                method_data = grouped[grouped.index.get_level_values("method") == method]
+                if method_data.empty:
+                    continue
+                years = method_data.index.get_level_values("year").to_numpy(dtype=float)
+                means = method_data['mean'].values
+                cis = method_data['ci'].values
+
+                ax.plot(
+                    years,
+                    means,
+                    linewidth=2.0,
+                    label=method.replace('_', ' ').title(),
+                    color=colors[idx],
+                )
+                ax.fill_between(years, means - cis, means + cis, color=colors[idx], alpha=0.15)
+
+        _apply_period_ticks(ax, all_years, label="Year")
         metric_label = METRIC_LABELS.get(metric, metric.replace("_", " ").title())
         ax.set_ylabel(metric_label)
         ax.set_title(f"Temporal {metric_label} by Method (95% CI)")
@@ -284,18 +357,31 @@ def plot_temporal_metrics(results_by_year_df: pd.DataFrame, output_dir: Path):
         return
 
     for metric in metrics:
-        pivot = (
-            results_by_year_df.groupby(["year", "method"])[metric]
-            .mean()
-            .reset_index()
-        )
+        group_cols = ["year", "method"]
+        has_maintenance = "maintenance" in results_by_year_df.columns
+        if has_maintenance:
+            group_cols.append("maintenance")
+
+        pivot = results_by_year_df.groupby(group_cols)[metric].mean().reset_index()
+        all_years = sorted(pivot["year"].unique())
 
         fig, ax = plt.subplots(figsize=(8, 4.5), dpi=200)
         for method in sorted(pivot["method"].unique()):
-            data_m = pivot[pivot["method"] == method]
-            ax.plot(data_m["year"], data_m[metric], linewidth=2, label=method)
+            if has_maintenance:
+                for maintenance in sorted(pivot["maintenance"].dropna().unique()):
+                    data_m = pivot[(pivot["method"] == method) & (pivot["maintenance"] == maintenance)]
+                    if data_m.empty:
+                        continue
+                    label = f"{method} ({maintenance})"
+                    line_style = "--" if maintenance == "no-retrain" else "-"
+                    ax.plot(data_m["year"], data_m[metric], linewidth=2, linestyle=line_style, label=label)
+            else:
+                data_m = pivot[pivot["method"] == method]
+                if data_m.empty:
+                    continue
+                ax.plot(data_m["year"], data_m[metric], linewidth=2, label=method)
 
-        _apply_period_ticks(ax, data_m["year"].tolist(), label="Year")
+        _apply_period_ticks(ax, all_years, label="Year")
         metric_label = METRIC_LABELS.get(metric, metric.replace("_", " ").title())
         ax.set_ylabel(metric_label)
         ax.set_title(f"Temporal {metric_label} by year")
@@ -377,7 +463,7 @@ def plot_original_vs_updated(results_by_year_df, output_dir):
     for ax in axes[len(metrics):]:
         ax.remove()
     
-    fig.suptitle("Original vs Updated Models", y=1.02)
+    fig.suptitle("Original vs Updated Models (averaged across methods)", y=1.02)
     fig.tight_layout()
     
     plot_path = output_dir / "temporal_original_vs_updated.png"

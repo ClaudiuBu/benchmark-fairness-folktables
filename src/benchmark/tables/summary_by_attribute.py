@@ -78,10 +78,10 @@ def _wrap_table_with_metadata(table_latex: str, task: str, attribute: str, outpu
     if has_maintenance:
         caption = f"Fairness metrics by method and maintenance strategy. Task: {task_desc}. Sensitive attribute: {attr_desc}. " \
                   f"Methods shown with 'No-Retrain' (model not updated on new years) and 'Retrain' (model updated annually). " \
-                  f"Values shown as mean [95\\% CI lower--upper] across 20 random seeds."
+                  f"Values shown as mean [95\\% CI lower--upper] across random seeds."
     else:
         caption = f"Fairness metrics by method. Task: {task_desc}. Sensitive attribute: {attr_desc}. " \
-                  f"Values shown as mean [95\\% CI lower--upper] across 20 random seeds."
+                  f"Values shown as mean [95\\% CI lower--upper] across random seeds."
     
     # Build complete table environment
     table_env = f"""\\begin{{table}}[h]
