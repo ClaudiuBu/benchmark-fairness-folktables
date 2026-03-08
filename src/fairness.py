@@ -50,6 +50,10 @@ def equalized_odds_gap(y_true, y_pred, A):
 
     mask0 = A == 0
     mask1 = A == 1
+
+    if not np.any(mask0) or not np.any(mask1):
+        return np.nan
+
     tpr0, fpr0 = _rates(mask0)
     tpr1, fpr1 = _rates(mask1)
 
