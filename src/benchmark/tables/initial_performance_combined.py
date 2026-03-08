@@ -79,6 +79,8 @@ def _build_task_values(
 
     values: dict[str, str] = {}
 
+    # Performance metrics (AUC, accuracy, etc.) don't vary by sensitive attribute
+    # They are duplicated in CSV rows, so we can pick any row (prefer first available)
     perf_row = _pick_row(df, method=method, maintenance=maintenance, sensitive_attribute=sex_attr)
     if perf_row is None:
         perf_row = _pick_row(df, method=method, maintenance=maintenance, sensitive_attribute=None)
@@ -89,6 +91,7 @@ def _build_task_values(
         else:
             values[metric] = _format_ci(perf_row, metric)
 
+    # Fairness metrics (DP/EO gap) DO vary by sensitive attribute, pick specific rows
     sex_row = _pick_row(df, method=method, maintenance=maintenance, sensitive_attribute=sex_attr)
     race_row = _pick_row(df, method=method, maintenance=maintenance, sensitive_attribute=race_attr)
 
