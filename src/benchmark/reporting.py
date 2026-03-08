@@ -492,41 +492,37 @@ def plot_original_vs_updated(results_by_year_df, output_dir):
     if not metrics:
         return
 
-    # Generate separate plots for each sensitive attribute (cannot average gap metrics across attributes)
-    attributes = sorted(results_by_year_df["sensitive_attribute"].unique()) if "sensitive_attribute" in results_by_year_df.columns else [None]
-    
-    for attr_name in attributes:
-        if attr_name is not None:
-            attr_data = results_by_year_df[results_by_year_df["sensitive_attribute"] == attr_name]
-            attr_suffix = f"_{attr_name.lower()}"
-            attr_title_suffix = f" - {attr_name}"
-        else:
-            attr_data = results_by_year_df
-            attr_suffix = ""
-            attr_title_suffix = ""
-        
-        if attr_data.empty:
-            continue
+    has_multiple_attributes = (
+        "sensitive_attribute" in results_by_year_df.columns
+        and results_by_year_df["sensitive_attribute"].nunique() > 1
+    )
+    general_metrics = [metric for metric in metrics if metric not in GAP_METRICS] if has_multiple_attributes else metrics
+    if not general_metrics:
+        return
 
-        n_cols = 2 if len(metrics) > 1 else 1
-        n_rows = int(np.ceil(len(metrics) / n_cols))
+    def _build_original_vs_updated_figure(plot_data: pd.DataFrame, title_suffix: str, metrics_to_plot: list[str]):
+        n_cols = 2 if len(metrics_to_plot) > 1 else 1
+        n_rows = int(np.ceil(len(metrics_to_plot) / n_cols))
         fig, axes = plt.subplots(n_rows, n_cols, figsize=(7 * n_cols, 4.5 * n_rows), dpi=200)
         axes = np.atleast_1d(axes).flatten()
-        
+
         colors = {"no-retrain": "#6E6E6E", "retrain": "#2C7FB8"}
-        years_sorted = sorted(attr_data["year"].unique())
-        
-        for idx, metric in enumerate(metrics):
+        years_sorted = sorted(plot_data["year"].unique())
+
+        for idx, metric in enumerate(metrics_to_plot):
             ax = axes[idx]
 
-            grouped = attr_data.groupby(["year", "maintenance"])[metric].agg(["mean", "std", "count"])
+            grouped = plot_data.groupby(["year", "maintenance"])[metric].agg(["mean", "std", "count"])
             grouped["ci"] = 1.96 * grouped["std"] / np.sqrt(grouped["count"])
 
             for maintenance in sorted(maintenance_opts):
                 data_m = grouped.loc[grouped.index.get_level_values("maintenance") == maintenance]
+                if data_m.empty:
+                    continue
+
                 years = [y for y, _ in data_m.index]
                 means = data_m["mean"].values
-                cis = data_m["ci"].values
+                cis = np.nan_to_num(data_m["ci"].values, nan=0.0)
 
                 line_style = "-" if maintenance == "retrain" else "--"
                 label = "Updated model" if maintenance == "retrain" else "Original model"
@@ -534,12 +530,11 @@ def plot_original_vs_updated(results_by_year_df, output_dir):
                 ax.plot(years, means, linewidth=2.0, linestyle=line_style, color=colors[maintenance], label=label)
                 ax.fill_between(years, means - cis, means + cis, color=colors[maintenance], alpha=0.15)
 
-            # Baseline initial performance from the first period of the original model
             if years_sorted:
                 first_period = years_sorted[0]
-                baseline_rows = attr_data[
-                    (attr_data["maintenance"] == "no-retrain")
-                    & (attr_data["year"] == first_period)
+                baseline_rows = plot_data[
+                    (plot_data["maintenance"] == "no-retrain")
+                    & (plot_data["year"] == first_period)
                 ]
                 if not baseline_rows.empty:
                     baseline_value = baseline_rows[metric].mean()
@@ -551,7 +546,7 @@ def plot_original_vs_updated(results_by_year_df, output_dir):
                         label="Initial performance",
                     )
 
-            _apply_period_ticks(ax, years, label="Year")
+            _apply_period_ticks(ax, years_sorted, label="Year")
             metric_label = METRIC_LABELS.get(metric, metric.replace("_", " ").title())
             ax.set_ylabel(metric_label)
             ax.set_title(metric_label)
@@ -574,17 +569,48 @@ def plot_original_vs_updated(results_by_year_df, output_dir):
                     bbox_to_anchor=(0.5, -0.18),
                 )
 
-        for ax in axes[len(metrics):]:
+        for ax in axes[len(metrics_to_plot):]:
             ax.remove()
-        
-        fig.suptitle(f"Original vs Updated Models{attr_title_suffix}", y=1.02)
+
+        fig.suptitle(f"Original vs Updated Models{title_suffix}", y=1.02)
         fig.tight_layout()
+        return fig
+
+    # General view (legacy behavior): aggregate across all available sensitive attributes
+    general_fig = _build_original_vs_updated_figure(
+        results_by_year_df,
+        " - General",
+        general_metrics,
+    )
+    general_path = _plot_output_path(output_dir, "original_vs_updated_general", "original_vs_updated_general.png")
+    _save_figure(general_fig, general_path)
+    combined_general_path = _plot_output_path(output_dir, "original_vs_updated_combined", "original_vs_updated_general.png")
+    _save_figure(general_fig, combined_general_path)
+    plt.close(general_fig)
+
+    # Generate separate plots for each sensitive attribute (cannot average gap metrics across attributes)
+    attributes = sorted(results_by_year_df["sensitive_attribute"].unique()) if "sensitive_attribute" in results_by_year_df.columns else [None]
+    
+    for attr_name in attributes:
+        if attr_name is not None:
+            attr_data = results_by_year_df[results_by_year_df["sensitive_attribute"] == attr_name]
+            attr_suffix = f"_{attr_name.lower()}"
+            attr_title_suffix = f" - {attr_name}"
+        else:
+            attr_data = results_by_year_df
+            attr_suffix = ""
+            attr_title_suffix = ""
         
-        plot_path = _plot_output_path(output_dir, "original_vs_updated", f"original_vs_updated{attr_suffix}.png")
-        _save_figure(fig, plot_path)
+        if attr_data.empty:
+            continue
+
+        fig = _build_original_vs_updated_figure(attr_data, attr_title_suffix, metrics)
+        
+        combined_path = _plot_output_path(output_dir, "original_vs_updated_combined", f"original_vs_updated{attr_suffix}.png")
+        _save_figure(fig, combined_path)
         plt.close(fig)
     
-    print(f"✓ Saved original vs updated plots (per attribute)")
+    print(f"✓ Saved original vs updated plots (general + per attribute)")
 
 
 def plot_original_vs_updated_by_attribute(results_by_year_df, output_dir):
