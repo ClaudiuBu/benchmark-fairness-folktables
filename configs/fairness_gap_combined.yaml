@@ -1,0 +1,26 @@
+inputs:
+  income_base_dir: "results/folktables/benchmark_temporal/folktables_benchmark_temporal"
+  employment_base_dir: "results/folktables/benchmark_temporal_employment/folktables_benchmark_temporal_employment"
+
+selection:
+  method: "baseline"
+  maintenance: "no-retrain"
+  race_attribute: "RAC1P"
+  sex_attribute: "SEX"
+  race_label: "Race-based gaps (White vs Non-White)"
+  sex_label: "Sex-based gaps (Female vs Male)"
+  income_label: "Income"
+  employment_label: "Employment"
+  metrics:
+    - "auc"
+    - "brier_score"
+    - "oe_gap"
+    - "accuracy"
+    - "sensitivity"
+    - "f1_score"
+    - "dp_gap"
+    - "eo_gap"
+  drop_fully_missing_metrics: true
+
+output:
+  path: "results/folktables/tables/fairness_gap_combined.tex"

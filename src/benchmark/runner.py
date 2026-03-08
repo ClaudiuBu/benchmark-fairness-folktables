@@ -133,6 +133,18 @@ def _predict_with_method(method, model, thresholds, X_test, A_test):
     return y_pred, y_proba
 
 
+def _append_run_history(base_output_dir: Path, history_row: dict):
+    history_path = base_output_dir / "run_history.csv"
+    history_df = pd.DataFrame([history_row])
+
+    if history_path.exists():
+        history_df.to_csv(history_path, mode="a", header=False, index=False)
+    else:
+        history_df.to_csv(history_path, index=False)
+
+    return history_path
+
+
 def run_benchmark(config_path: str):
     start_time = time.perf_counter()
     with open(config_path, "r") as f:
@@ -145,12 +157,25 @@ def run_benchmark(config_path: str):
     seeds = config.get("seeds", list(range(20)))
     threshold_grid = config.get("threshold_grid", np.linspace(0.05, 0.95, 19).tolist())
 
-    output_dir = Path(config["output"]["dir"])
+    output_cfg = config["output"]
+    configured_output_dir = Path(output_cfg["dir"])
+    config_stem = Path(config_path).stem
+
+    group_by_config = bool(output_cfg.get("group_by_config", True))
+    if group_by_config and configured_output_dir.name != config_stem:
+        base_output_dir = configured_output_dir / config_stem
+    else:
+        base_output_dir = configured_output_dir
+    base_output_dir.mkdir(parents=True, exist_ok=True)
+
+    timestamp_format = output_cfg.get("timestamp_format", "%Y%m%d_%H%M%S")
+    run_id = datetime.now().strftime(timestamp_format)
+    timestamped_runs = bool(output_cfg.get("timestamped_runs", True))
+    output_dir = base_output_dir / run_id if timestamped_runs else base_output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Save resolved config snapshot
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    config_out = output_dir / f"config_{timestamp}.yaml"
+    # Save resolved config snapshot for this run
+    config_out = output_dir / "config_resolved.yaml"
     with open(config_out, "w") as f:
         yaml.dump(config, f)
 
@@ -629,6 +654,10 @@ def run_benchmark(config_path: str):
 
     elapsed_seconds = time.perf_counter() - start_time
     meta = {
+        "run_id": run_id,
+        "config_path": str(config_path),
+        "base_output_dir": str(base_output_dir),
+        "output_dir": str(output_dir),
         "experiment": exp_cfg["name"],
         "methods": methods,
         "seeds": seeds,
@@ -652,6 +681,22 @@ def run_benchmark(config_path: str):
     meta_path = output_dir / "run_meta.json"
     with open(meta_path, "w") as f:
         json.dump(meta, f, indent=2)
+
+    history_path = _append_run_history(
+        base_output_dir,
+        {
+            "run_id": run_id,
+            "timestamp": datetime.now().isoformat(timespec="seconds"),
+            "config_path": str(config_path),
+            "experiment": exp_cfg["name"],
+            "task": data_cfg.get("task", "unknown"),
+            "mode": mode,
+            "output_dir": str(output_dir),
+            "results": str(results_path),
+            "summary": str(summary_path),
+            "elapsed_seconds": round(elapsed_seconds, 2),
+        },
+    )
 
     progress.close()
 
@@ -686,6 +731,8 @@ def run_benchmark(config_path: str):
 
     elapsed_minutes = elapsed_seconds / 60
     print("✓ Benchmark complete")
+    print(f"  Base output dir: {base_output_dir}")
+    print(f"  Run output dir: {output_dir}")
     print(f"  Results: {results_path}")
     print(f"  Summary: {summary_path}")
     print(f"  Summary with CI: {summary_ci_path}")
@@ -693,4 +740,5 @@ def run_benchmark(config_path: str):
         print(f"  Statistical tests: {tests_path}")
     if initial_table_path is not None:
         print(f"  Initial performance table: {initial_table_path}")
+    print(f"  Run history: {history_path}")
     print(f"  Elapsed time: {elapsed_minutes:.1f} min ({elapsed_seconds:.1f} s)")
