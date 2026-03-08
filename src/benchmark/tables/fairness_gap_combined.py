@@ -12,17 +12,7 @@ from pathlib import Path
 import pandas as pd
 import yaml
 
-
-METRIC_LABELS = {
-    "auc": "AUC",
-    "brier_score": "Brier Score",
-    "oe_gap": "O/E Gap",
-    "accuracy": "Accuracy",
-    "sensitivity": "Sensitivity",
-    "f1_score": "F1 Score",
-    "dp_gap": "DP Gap",
-    "eo_gap": "EO Gap",
-}
+from src.benchmark.metrics import METRIC_LABELS
 
 
 def _format_ci(row: pd.Series | None, metric: str) -> str:
