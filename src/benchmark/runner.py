@@ -31,9 +31,53 @@ from src.benchmark.reporting import (
     plot_static_comparison,
     plot_temporal_comparison_by_year,
     plot_original_vs_updated,
+    plot_original_vs_updated_by_attribute,
     compute_confidence_intervals,
     statistical_tests_vs_baseline,
 )
+
+
+def _compute_stratified_metrics(y_true, y_pred, y_proba, A, sensitive_attr_name):
+    """Compute metrics stratified by sensitive attribute values.
+    
+    Returns a list of dicts, one per unique value of A, with structure:
+    {
+        'sensitive_attribute': sensitive_attr_name,
+        'sensitive_attribute_value': attr_value,
+        **metrics
+    }
+    
+    Note: Fairness gaps (dp_gap, eo_gap, oe_gap) will be NaN for stratified subgroups
+    since they measure disparities between groups, not within a single group.
+    """
+    import warnings
+    
+    results = []
+    unique_values = sorted(np.unique(A))
+    
+    for attr_val in unique_values:
+        mask = A == attr_val
+        if mask.sum() == 0:
+            continue
+        
+        y_true_subset = y_true[mask]
+        y_pred_subset = y_pred[mask]
+        y_proba_subset = y_proba[mask]
+        A_subset = A[mask]
+        
+        # Suppress warnings about fairness gaps on single-group subsets
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore', message='Mean of empty slice')
+            warnings.filterwarnings('ignore', message='invalid value encountered')
+            metrics = compute_metrics(y_true_subset, y_pred_subset, y_proba_subset, A_subset)
+        
+        results.append({
+            'sensitive_attribute': sensitive_attr_name,
+            'sensitive_attribute_value': int(attr_val),
+            **metrics
+        })
+    
+    return results
 
 
 def _generate_initial_performance_table(
@@ -390,7 +434,11 @@ def run_benchmark(config_path: str):
                         y_year_pred, y_year_proba = _predict_with_method(
                             method, model, thresholds, X_year_scaled, A_year
                         )
+                        
+                        # Compute metrics overall (for aggregation/tables)
                         metrics_year = compute_metrics(y_year, y_year_pred, y_year_proba, A_year)
+
+                        # Save overall yearly metrics for this attribute (used by gap plots)
                         results_by_year.append({
                             "seed": seed,
                             "method": method,
@@ -398,8 +446,23 @@ def run_benchmark(config_path: str):
                             "maintenance": "no-retrain",
                             "year": year,
                             "sensitive_attribute": data_cfg["sensitive_attribute"],
+                            "sensitive_attribute_value": "ALL",
                             **metrics_year,
                         })
+                        
+                        # Compute metrics stratified by sensitive attribute values
+                        stratified_metrics = _compute_stratified_metrics(
+                            y_year, y_year_pred, y_year_proba, A_year, data_cfg["sensitive_attribute"]
+                        )
+                        for strat_entry in stratified_metrics:
+                            results_by_year.append({
+                                "seed": seed,
+                                "method": method,
+                                "task": data_cfg["task"],
+                                "maintenance": "no-retrain",
+                                "year": year,
+                                **strat_entry
+                            })
 
                         if year in summary_test_periods_set:
                             temporal_primary_metrics.append(metrics_year)
@@ -408,6 +471,8 @@ def run_benchmark(config_path: str):
                         if "RAC1P" in X_year.columns and data_cfg["sensitive_attribute"] != "RAC1P":
                             A_year_race = (X_year["RAC1P"] == 1).astype(int)
                             metrics_year_race = compute_metrics(y_year, y_year_pred, y_year_proba, A_year_race)
+
+                            # Save overall yearly metrics for secondary attribute (used by gap plots)
                             results_by_year.append({
                                 "seed": seed,
                                 "method": method,
@@ -415,8 +480,23 @@ def run_benchmark(config_path: str):
                                 "maintenance": "no-retrain",
                                 "year": year,
                                 "sensitive_attribute": "RAC1P",
+                                "sensitive_attribute_value": "ALL",
                                 **metrics_year_race,
                             })
+                            
+                            # Stratified metrics for secondary attribute
+                            stratified_race = _compute_stratified_metrics(
+                                y_year, y_year_pred, y_year_proba, A_year_race, "RAC1P"
+                            )
+                            for strat_entry in stratified_race:
+                                results_by_year.append({
+                                    "seed": seed,
+                                    "method": method,
+                                    "task": data_cfg["task"],
+                                    "maintenance": "no-retrain",
+                                    "year": year,
+                                    **strat_entry
+                                })
 
                             if year in summary_test_periods_set:
                                 temporal_race_metrics.append(metrics_year_race)
@@ -527,18 +607,35 @@ def run_benchmark(config_path: str):
                     y_year_pred, y_year_proba = _predict_with_method(
                         method, model, thresholds, X_year_scaled, A_year
                     )
+                    
+                    # Compute metrics overall (for aggregation/tables)
                     metrics_year = compute_metrics(y_year, y_year_pred, y_year_proba, A_year)
-                    results_by_year.append(
-                        {
+
+                    # Save overall yearly metrics for this attribute (used by gap plots)
+                    results_by_year.append({
+                        "seed": seed,
+                        "method": method,
+                        "task": data_cfg["task"],
+                        "maintenance": "retrain",
+                        "year": test_period,
+                        "sensitive_attribute": data_cfg["sensitive_attribute"],
+                        "sensitive_attribute_value": "ALL",
+                        **metrics_year,
+                    })
+                    
+                    # Compute metrics stratified by sensitive attribute values
+                    stratified_metrics = _compute_stratified_metrics(
+                        y_year, y_year_pred, y_year_proba, A_year, data_cfg["sensitive_attribute"]
+                    )
+                    for strat_entry in stratified_metrics:
+                        results_by_year.append({
                             "seed": seed,
                             "method": method,
                             "task": data_cfg["task"],
                             "maintenance": "retrain",
                             "year": test_period,
-                            "sensitive_attribute": data_cfg["sensitive_attribute"],
-                            **metrics_year,
-                        }
-                    )
+                            **strat_entry
+                        })
 
                     primary_key = (method, data_cfg["task"], data_cfg["sensitive_attribute"])
                     retrain_metric_accumulator.setdefault(primary_key, []).append(metrics_year)
@@ -547,17 +644,33 @@ def run_benchmark(config_path: str):
                     if "RAC1P" in X_year.columns and data_cfg["sensitive_attribute"] != "RAC1P":
                         A_year_race = (X_year["RAC1P"] == 1).astype(int)
                         metrics_year_race = compute_metrics(y_year, y_year_pred, y_year_proba, A_year_race)
-                        results_by_year.append(
-                            {
+
+                        # Save overall yearly metrics for secondary attribute (used by gap plots)
+                        results_by_year.append({
+                            "seed": seed,
+                            "method": method,
+                            "task": data_cfg["task"],
+                            "maintenance": "retrain",
+                            "year": test_period,
+                            "sensitive_attribute": "RAC1P",
+                            "sensitive_attribute_value": "ALL",
+                            **metrics_year_race,
+                        })
+                        
+                        # Stratified metrics for secondary attribute
+                        stratified_race = _compute_stratified_metrics(
+                            y_year, y_year_pred, y_year_proba, A_year_race, "RAC1P"
+                        )
+                        for strat_entry in stratified_race:
+                            results_by_year.append({
                                 "seed": seed,
                                 "method": method,
                                 "task": data_cfg["task"],
                                 "maintenance": "retrain",
                                 "year": test_period,
-                                "sensitive_attribute": "RAC1P",
-                                **metrics_year_race,
-                            }
-                        )
+                                **strat_entry
+                            })
+                        
                         race_key = (method, data_cfg["task"], "RAC1P")
                         retrain_metric_accumulator.setdefault(race_key, []).append(metrics_year_race)
 
@@ -631,10 +744,12 @@ def run_benchmark(config_path: str):
         results_by_year_path = output_dir / "benchmark_results_by_year.csv"
         results_by_year_df.to_csv(results_by_year_path, index=False)
 
-        # Include maintenance in groupby if it exists
+        # Include maintenance and sensitive_attribute_value in groupby if they exist
         groupby_cols = ["year", "method"]
         if "maintenance" in results_by_year_df.columns:
             groupby_cols.append("maintenance")
+        if "sensitive_attribute_value" in results_by_year_df.columns:
+            groupby_cols.append("sensitive_attribute_value")
         
         numeric_year_cols = [
             col for col in results_by_year_df.select_dtypes(include=[np.number]).columns if col not in ["seed", "year"]
@@ -651,6 +766,7 @@ def run_benchmark(config_path: str):
         plot_temporal_metrics(results_by_year_df, output_dir)
         plot_temporal_comparison_by_year(results_by_year_df, output_dir)
         plot_original_vs_updated(results_by_year_df, output_dir)
+        plot_original_vs_updated_by_attribute(results_by_year_df, output_dir)
 
     elapsed_seconds = time.perf_counter() - start_time
     meta = {
