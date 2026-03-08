@@ -69,30 +69,77 @@ def _format_median_iqr(series: pd.Series) -> str:
     return f"{median:.1f} [{q1:.1f}, {q3:.1f}]"
 
 
-def _summarize(df: pd.DataFrame) -> dict:
+def _format_period_label(years: list[int]) -> str:
+    year_min = min(years)
+    year_max = max(years)
+    if year_min == year_max:
+        return f"{year_min}"
+    return f"{year_min}--{year_max}"
+
+
+def _summarize(df: pd.DataFrame, task: str) -> dict:
+    """Return dict with both counts and percentages for each characteristic."""
     summary = {}
-    summary["N"] = f"{len(df):,}".replace(",", " ")
-    summary["Positive %"] = _format_percent(100.0 * float(df["__y__"].mean()))
+    n_total = len(df)
+    
+    # Total N
+    summary["Persons (observations)"] = (n_total, 100.0)
 
     if "SEX" in df.columns:
-        summary["Female %"] = _format_percent(100.0 * float((df["SEX"] == 2).mean()))
-        summary["Male %"] = _format_percent(100.0 * float((df["SEX"] == 1).mean()))
+        summary["_sex_heading"] = ("sex_heading", None)
+        n_female = int((df["SEX"] == 2).sum())
+        pct_female = 100.0 * float((df["SEX"] == 2).mean())
+        summary["Female"] = (n_female, pct_female)
+        
+        n_male = int((df["SEX"] == 1).sum())
+        pct_male = 100.0 * float((df["SEX"] == 1).mean())
+        summary["Male"] = (n_male, pct_male)
 
     if "RAC1P" in df.columns:
-        race_counts = df["RAC1P"].value_counts(dropna=False)
-        for code, label in RACE_LABELS.items():
-            if code in race_counts.index:
-                summary[f"Race: {label} %"] = _format_percent(100.0 * float(race_counts[code] / len(df)))
+        summary["_race_heading"] = ("race_heading", None)
+        race_labels = df["RAC1P"].map(RACE_LABELS).fillna("Unknown")
+        race_counts = race_labels.value_counts(dropna=False)
+        race_display_order = [
+            "White",
+            "Black",
+            "American Indian/Alaska Native",
+            "Asian",
+            "Native Hawaiian/Pacific Islander",
+            "Other",
+            "Two or more races",
+            "Unknown",
+        ]
+        for label in race_display_order:
+            if label in race_counts.index:
+                n_race = int(race_counts[label])
+                pct_race = 100.0 * float(race_counts[label] / len(df))
+                summary[label] = (n_race, pct_race)
 
     if "AGEP" in df.columns:
-        summary["Age median [IQR]"] = _format_median_iqr(df["AGEP"].dropna())
+        # Age stays as median [IQR], no counts for this
+        summary["Age median [IQR]"] = ("age_special", _format_median_iqr(df["AGEP"].dropna()))
 
     if "SCHL" in df.columns:
+        summary["_education_heading"] = ("education_heading", None)
         edu = _education_bucket(df["SCHL"].dropna())
         edu_counts = edu.value_counts(dropna=False)
-        for label in ["Less than HS", "HS or GED", "Some college", "Bachelor+"]:
+        for label in ["Less than HS", "HS or GED", "Some college", "Bachelor+", "Unknown"]:
             if label in edu_counts.index:
-                summary[f"Education: {label} %"] = _format_percent(100.0 * float(edu_counts[label] / len(edu)))
+                n_edu = int(edu_counts[label])
+                pct_edu = 100.0 * float(edu_counts[label] / len(edu))
+                summary[label] = (n_edu, pct_edu)
+
+    # Outcome (at the end)
+    summary["_outcome_heading"] = ("outcome_heading", None)
+    n_positive = int((df["__y__"] == 1).sum())
+    pct_positive = 100.0 * float(df["__y__"].mean())
+    
+    if task == "income":
+        summary["Income $>$ \\$50K"] = (n_positive, pct_positive)
+    elif task == "employment":
+        summary["Employed"] = (n_positive, pct_positive)
+    else:
+        summary["Positive"] = (n_positive, pct_positive)
 
     return summary
 
@@ -104,12 +151,19 @@ def generate_cohort_table(config_path: str) -> Path:
     data_cfg = config["data"]
     task = data_cfg["task"]
     states = data_cfg["states"]
-    max_samples = data_cfg.get("max_samples")
+    # Cohort tables should report real population counts by default.
+    # Optional override: set data.cohort_max_samples in config.
+    max_samples = data_cfg.get("cohort_max_samples")
     sample_seed = int(config.get("sample_seed", 42))
 
     if data_cfg.get("mode", "static") == "temporal":
-        train_years = data_cfg["train_years"]
-        temporal_years = data_cfg["val_years"] + data_cfg["test_years"]
+        train_years = sorted(set(data_cfg["train_years"] + data_cfg.get("val_years", [])))
+        development_years = set(train_years)
+        temporal_years = sorted(
+            year for year in data_cfg["test_years"] if year not in development_years
+        )
+        if not temporal_years:
+            temporal_years = sorted(set(data_cfg["test_years"]))
     else:
         train_years = data_cfg["years"]
         temporal_years = data_cfg["years"]
@@ -117,24 +171,106 @@ def generate_cohort_table(config_path: str) -> Path:
     train_df = _load_period_dataset(task, states, train_years, max_samples, sample_seed)
     temporal_df = _load_period_dataset(task, states, temporal_years, max_samples, sample_seed + 1)
 
-    train_summary = _summarize(train_df)
-    temporal_summary = _summarize(temporal_df)
+    train_summary = _summarize(train_df, task)
+    temporal_summary = _summarize(temporal_df, task)
+
+    train_period_label = _format_period_label(train_years)
+    temporal_period_label = _format_period_label(temporal_years)
 
     rows = []
     for key in train_summary.keys():
-        rows.append({
-            "Characteristic": key,
-            f"Training ({min(train_years)}-{max(train_years)})": train_summary.get(key, "-"),
-            f"Temporal ({min(temporal_years)}-{max(temporal_years)})": temporal_summary.get(key, "-"),
-        })
+        train_val = train_summary.get(key)
+        temporal_val = temporal_summary.get(key)
+        
+        # Special handling for category headings
+        if key == "_sex_heading":
+            rows.append(
+                {
+                    "label": "\\addlinespace\n\\textit{Sex:}",
+                    "train_n": "",
+                    "train_pct": "",
+                    "temporal_n": "",
+                    "temporal_pct": "",
+                }
+            )
+        elif key == "_race_heading":
+            rows.append(
+                {
+                    "label": "\\addlinespace\n\\textit{Race:}",
+                    "train_n": "",
+                    "train_pct": "",
+                    "temporal_n": "",
+                    "temporal_pct": "",
+                }
+            )
+        elif key == "_education_heading":
+            rows.append(
+                {
+                    "label": "\\addlinespace\n\\textit{Education:}",
+                    "train_n": "",
+                    "train_pct": "",
+                    "temporal_n": "",
+                    "temporal_pct": "",
+                }
+            )
+        elif key == "_outcome_heading":
+            rows.append(
+                {
+                    "label": "\\addlinespace\n\\textit{Outcome:}",
+                    "train_n": "",
+                    "train_pct": "",
+                    "temporal_n": "",
+                    "temporal_pct": "",
+                }
+            )
+        # Special handling for Age (median/IQR)
+        elif key == "Age median [IQR]":
+            rows.append(
+                {
+                    "label": key,
+                    "train_n": "-",
+                    "train_pct": train_val[1] if isinstance(train_val, tuple) else "-",
+                    "temporal_n": "-",
+                    "temporal_pct": temporal_val[1] if isinstance(temporal_val, tuple) else "-",
+                }
+            )
+        else:
+            # Normal case with counts and percentages
+            train_n = f"{train_val[0]:,}".replace(",", " ") if isinstance(train_val, tuple) else "-"
+            train_pct = _format_percent(train_val[1]) if isinstance(train_val, tuple) else "-"
+            temporal_n = f"{temporal_val[0]:,}".replace(",", " ") if isinstance(temporal_val, tuple) else "-"
+            temporal_pct = _format_percent(temporal_val[1]) if isinstance(temporal_val, tuple) else "-"
 
-    table_df = pd.DataFrame(rows)
+            rows.append(
+                {
+                    "label": key,
+                    "train_n": train_n,
+                    "train_pct": train_pct,
+                    "temporal_n": temporal_n,
+                    "temporal_pct": temporal_pct,
+                }
+            )
 
     output_dir = Path(config["output"]["dir"])
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / "cohort_table.tex"
 
-    latex = table_df.to_latex(index=False, escape=False)
+    latex_lines = [
+        "\\begin{tabular}{lcccc}",
+        "\\toprule",
+        f" & \\multicolumn{{2}}{{c}}{{Training period ({train_period_label})}} & \\multicolumn{{2}}{{c}}{{Temporal validation period ({temporal_period_label})}} \\\\",
+        "\\cmidrule(lr){2-3} \\cmidrule(lr){4-5}",
+        " & N & \\% & N & \\% \\\\",
+        "\\midrule",
+    ]
+
+    for row in rows:
+        latex_lines.append(
+            f"{row['label']} & {row['train_n']} & {row['train_pct']} & {row['temporal_n']} & {row['temporal_pct']} \\\\" 
+        )
+
+    latex_lines.extend(["\\bottomrule", "\\end{tabular}", ""])
+    latex = "\n".join(latex_lines)
     output_path.write_text(latex)
 
     return output_path

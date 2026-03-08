@@ -12,8 +12,8 @@ data:
   val_years: [2015]
   test_years: [2016]
   sensitive_attribute: "SEX"
-  max_samples: 2000
-  max_samples_per_year: 2000
+  max_samples: null
+  max_samples_per_year: null
 
 methods:
   - baseline

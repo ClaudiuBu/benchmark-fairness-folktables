@@ -1,0 +1,20 @@
+inputs:
+  income_base_dir: "results/folktables/benchmark_temporal/folktables_benchmark_temporal"
+  employment_base_dir: "results/folktables/benchmark_temporal_employment/folktables_benchmark_temporal_employment"
+
+selection:
+  method: "baseline"
+  maintenance: "no-retrain"
+  sensitive_attributes:
+    sex: "SEX"
+    race: "RAC1P"
+  performance_metrics:
+    - "auc"
+    - "brier_score"
+    - "accuracy"
+    - "sensitivity"
+    - "f1_score"
+    - "oe_gap"
+
+output:
+  path: "results/folktables/tables/initial_performance_combined.tex"

@@ -14,8 +14,8 @@ data:
   # Initial test on 2014 hold-out set, temporal test on subsequent years
   test_years: [2014, 2015, 2016, 2017, 2018]
   sensitive_attribute: "SEX"
-  max_samples: 150000
-  max_samples_per_year: 150000
+  max_samples: null
+  max_samples_per_year: null
 
 methods:
   - baseline
