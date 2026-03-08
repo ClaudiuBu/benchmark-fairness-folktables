@@ -506,7 +506,7 @@ def run_benchmark(config_path: str):
                     if temporal_primary_metrics:
                         metric_names = temporal_primary_metrics[0].keys()
                         aggregated_primary_metrics = {
-                            metric_name: float(np.mean([metrics_row[metric_name] for metrics_row in temporal_primary_metrics]))
+                            metric_name: float(np.nanmean([metrics_row[metric_name] for metrics_row in temporal_primary_metrics]))
                             for metric_name in metric_names
                         }
                         results.append(
@@ -523,7 +523,7 @@ def run_benchmark(config_path: str):
                     if temporal_race_metrics:
                         metric_names_race = temporal_race_metrics[0].keys()
                         aggregated_race_metrics = {
-                            metric_name: float(np.mean([metrics_row[metric_name] for metrics_row in temporal_race_metrics]))
+                            metric_name: float(np.nanmean([metrics_row[metric_name] for metrics_row in temporal_race_metrics]))
                             for metric_name in metric_names_race
                         }
                         results.append(
@@ -682,7 +682,7 @@ def run_benchmark(config_path: str):
                     continue
                 metric_names = metric_list[0].keys()
                 aggregated_metrics = {
-                    metric_name: float(np.mean([metrics[metric_name] for metrics in metric_list]))
+                    metric_name: float(np.nanmean([metrics[metric_name] for metrics in metric_list]))
                     for metric_name in metric_names
                 }
                 results.append(
