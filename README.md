@@ -96,10 +96,7 @@ benchmark-fairness-folktables/
 │   └── ...
 ├── src/
 │   ├── benchmark/
-│   │   ├── data/                # Data loading & splitting
-│   │   │   ├── loaders.py       (Folktables data loading)
-│   │   │   ├── attributes.py    (Sensitive attribute extraction)
-│   │   │   └── splitting.py     (Train/val/test stratification)
+│   │   ├── data.py              # Data loading & splitting utilities
 │   │   ├── tables/              # Report table generation
 │   │   │   ├── cohort_table.py  (Population characteristics)
 │   │   │   └── initial_performance.py
@@ -108,6 +105,7 @@ benchmark-fairness-folktables/
 │   │   ├── methods.py           # Fairness methods (baseline, reweighing, etc)
 │   │   ├── reporting.py         # Results visualization & analysis
 │   │   └── runner.py            # Main benchmark orchestrator
+│   ├── fairness.py              # Core fairness metric functions
 │   └── benchmark_runner.py      # CLI entry point
 ├── results/                     # Generated results (gitignored)
 ├── data/                        # ACS data cache (gitignored)
@@ -210,14 +208,14 @@ retrain = temporal[temporal['maintenance'] == 'retrain']
 
 ## 🔍 Understanding the Code
 
-### Data Pipeline (`src/benchmark/data/`)
+### Data Pipeline (`src/benchmark/data.py`)
 
 ```python
 from src.benchmark.data import (
-    load_folktables,           # Load aggregated data
-    load_folktables_by_year,   # Load per-year data
+    load_folktables,              # Load aggregated data
+    load_folktables_by_period,    # Load per-year or per-quarter data
     extract_sensitive_attribute,  # Binary encoding of attributes
-    stratified_split,          # Balanced train/val/test
+    stratified_split,             # Balanced train/val/test
 )
 ```
 
