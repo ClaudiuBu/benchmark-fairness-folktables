@@ -351,6 +351,9 @@ def run_benchmark(config_path: str):
         if "retrain" in maintenance_strategies:
             progress_total += num_seeds * num_methods * len(retrain_test_periods)
     else:
+        # Static mode: keep_sensitive_cols defaults to False so the primary
+        # sensitive attribute is excluded from the feature matrix.  A_all still
+        # captures the binary sensitive-attribute vector for fairness metrics.
         X_df, y_all, A_all = load_folktables(
             task=data_cfg["task"],
             states=data_cfg["states"],
@@ -358,7 +361,6 @@ def run_benchmark(config_path: str):
             sensitive_attribute=data_cfg["sensitive_attribute"],
             max_samples=max_samples,
             random_state=sample_seed,
-            keep_sensitive_cols=True,
         )
         progress_total = ProgressCalculator.calculate_static_steps(
             num_seeds=len(seeds),
@@ -410,20 +412,6 @@ def run_benchmark(config_path: str):
 
                 temporal_primary_metrics = []
                 temporal_race_metrics = []
-                
-                # Compute metrics on secondary attribute (RAC1P) if available and different from primary
-                if mode == "temporal" and "RAC1P" in X_test_df_for_attrs.columns and data_cfg["sensitive_attribute"] != "RAC1P":
-                    A_race = (X_test_df_for_attrs["RAC1P"] == 1).astype(int)
-                    metrics_race = compute_metrics(y_test, y_pred, y_proba, A_race)
-                    result_entry_race = {
-                        "seed": seed,
-                        "method": method,
-                        "task": data_cfg["task"],
-                        "sensitive_attribute": "RAC1P",
-                        **metrics_race
-                    }
-                    if mode != "temporal":
-                        results.append(result_entry_race)
                 
                 progress.update(f"seed={seed} method={method} test=all")
 
