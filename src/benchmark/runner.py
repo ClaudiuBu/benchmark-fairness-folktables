@@ -21,6 +21,10 @@ from src.benchmark.methods import (
     kamiran_calders_weights,
     choose_thresholds_equalized_odds,
     train_with_lagrangian,
+    choose_calibrated_equalized_odds,
+    apply_calibrated_equalized_odds,
+    choose_reject_option_margin,
+    _apply_reject_option,
 )
 from src.benchmark.metrics import compute_metrics, METRIC_NAMES, METRIC_LABELS
 from src.benchmark.tables.initial_performance import _format_ci
@@ -156,7 +160,21 @@ def _train_method_on_data(method, X_train, y_train, A_train, X_val, y_val, A_val
         lr = float(lag_cfg.get("lr", 0.1))
         model = train_with_lagrangian(X_train, y_train, A_train, seed, num_iters, lr)
         return model, None
-    
+
+    elif method == "calibrated_equalized_odds":
+        model = make_model(seed)
+        model.fit(X_train, y_train)
+        y_val_proba = model.predict_proba(X_val)[:, 1]
+        mixing = choose_calibrated_equalized_odds(y_val, y_val_proba, A_val, grid=threshold_grid, seed=seed)
+        return model, mixing
+
+    elif method == "reject_option":
+        model = make_model(seed)
+        model.fit(X_train, y_train)
+        y_val_proba = model.predict_proba(X_val)[:, 1]
+        margin_info = choose_reject_option_margin(y_val, y_val_proba, A_val)
+        return model, margin_info
+
     else:
         raise ValueError(f"Unknown method: {method}")
 
@@ -164,16 +182,25 @@ def _train_method_on_data(method, X_train, y_train, A_train, X_val, y_val, A_val
 def _predict_with_method(method, model, thresholds, X_test, A_test):
     """Get predictions from a trained model."""
     y_proba = model.predict_proba(X_test)[:, 1]
-    
+
     if method == "equalized_odds" and thresholds is not None:
         y_pred = np.where(
             A_test == 0,
             y_proba >= thresholds[0],
             y_proba >= thresholds[1],
         ).astype(int)
+    elif method == "calibrated_equalized_odds" and thresholds is not None:
+        y_pred = apply_calibrated_equalized_odds(y_proba, A_test, thresholds)
+    elif method == "reject_option" and thresholds is not None:
+        y_pred = _apply_reject_option(
+            y_proba,
+            A_test,
+            margin=float(thresholds["margin"]),
+            disadvantaged_group=int(thresholds["disadvantaged_group"]),
+        )
     else:
         y_pred = (y_proba >= 0.5).astype(int)
-    
+
     return y_pred, y_proba
 
 

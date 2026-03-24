@@ -22,6 +22,8 @@ methods:
   - reweighing
   - equalized_odds
   - fairness_constraint
+  - calibrated_equalized_odds
+  - reject_option
 
 maintenance_strategies:
   - "no-retrain"      # Train once, never update

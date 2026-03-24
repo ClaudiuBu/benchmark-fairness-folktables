@@ -18,6 +18,8 @@ data:
 methods:
   - baseline
   - equalized_odds
+  - calibrated_equalized_odds
+  - reject_option
 
 maintenance_strategies:
   - "no-retrain"
