@@ -11,6 +11,29 @@ from scipy import stats
 from src.benchmark.metrics import METRIC_NAMES, METRIC_LABELS
 
 
+def _t_ci_half_width(grouped_df: pd.DataFrame, ci: float = 0.95) -> pd.Series:
+    """Compute per-row CI half-width using the t-distribution.
+
+    Using the t-distribution (rather than the normal approximation z=1.96) is
+    important for the small sample sizes typical in these benchmarks (n ≈ 10–20
+    seeds).  For n=10 seeds, t_{9}(0.975) ≈ 2.26 vs z = 1.96, giving CIs that
+    are ~13% wider – a meaningful difference at this scale.
+
+    Args:
+        grouped_df: DataFrame with ``count`` and ``std`` columns (as produced
+            by ``.agg(['mean', 'std', 'count'])``).
+        ci: Confidence level (default 0.95).
+
+    Returns:
+        Series of CI half-widths aligned to ``grouped_df``'s index.
+    """
+    n = grouped_df["count"].values.astype(float)
+    s = grouped_df["std"].values
+    df_dof = np.maximum(n - 1, 1)
+    t_crit = stats.t.ppf((1 + ci) / 2, df_dof)
+    return pd.Series(t_crit * s / np.sqrt(n), index=grouped_df.index)
+
+
 # Mapping for attribute names to readable labels
 ATTRIBUTE_NAME_LABELS = {
     "SEX": "SEX",
@@ -168,7 +191,7 @@ def compute_confidence_intervals(results_df: pd.DataFrame, ci=0.95, group_by=Non
                 continue
 
             mean = float(np.mean(values))
-            std = float(np.std(values))
+            std = float(np.std(values, ddof=1))
             if len(values) < 2:
                 ci_range = 0.0
             else:
@@ -344,7 +367,7 @@ def plot_temporal_comparison_by_year(results_by_year_df: pd.DataFrame, output_di
                 group_cols.append("maintenance")
 
             grouped = attr_data.groupby(group_cols)[metric].agg(['mean', 'std', 'count'])
-            grouped['ci'] = 1.96 * grouped['std'] / np.sqrt(grouped['count'])
+            grouped['ci'] = _t_ci_half_width(grouped)
 
             methods = sorted(attr_data['method'].unique())
             colors = sns.color_palette("muted", n_colors=len(methods))
@@ -513,7 +536,7 @@ def plot_original_vs_updated(results_by_year_df, output_dir):
             ax = axes[idx]
 
             grouped = plot_data.groupby(["year", "maintenance"])[metric].agg(["mean", "std", "count"])
-            grouped["ci"] = 1.96 * grouped["std"] / np.sqrt(grouped["count"])
+            grouped["ci"] = _t_ci_half_width(grouped)
 
             for maintenance in sorted(maintenance_opts):
                 data_m = grouped.loc[grouped.index.get_level_values("maintenance") == maintenance]
@@ -672,7 +695,7 @@ def plot_original_vs_updated_by_attribute(results_by_year_df, output_dir):
                 overall_data = attr_data[attr_data["sensitive_attribute_value"].astype(str) == "ALL"]
                 if not overall_data.empty:
                     grouped = overall_data.groupby(["year", "maintenance"])[metric].agg(["mean", "std", "count"])
-                    grouped["ci"] = 1.96 * grouped["std"] / np.sqrt(grouped["count"])
+                    grouped["ci"] = _t_ci_half_width(grouped)
 
                     for maintenance in sorted(maintenance_opts):
                         data_m = grouped.loc[grouped.index.get_level_values("maintenance") == maintenance]
@@ -715,7 +738,7 @@ def plot_original_vs_updated_by_attribute(results_by_year_df, output_dir):
                     base_color = value_colors[val_idx % len(value_colors)]
 
                     grouped = value_data.groupby(["year", "maintenance"])[metric].agg(["mean", "std", "count"])
-                    grouped["ci"] = 1.96 * grouped["std"] / np.sqrt(grouped["count"])
+                    grouped["ci"] = _t_ci_half_width(grouped)
 
                     for maintenance in sorted(maintenance_opts):
                         data_m = grouped.loc[grouped.index.get_level_values("maintenance") == maintenance]

@@ -123,7 +123,7 @@ def generate_fairness_gap_combined_table(config_path: str) -> Path:
         table_rows.append(row)
 
     race_label = selection.get("race_label", "Race-based gaps (White vs Non-White)")
-    sex_label = selection.get("sex_label", "Sex-based gaps (Female vs Male)")
+    sex_label = selection.get("sex_label", "Sex-based gaps (Male vs Female)")
     income_label = selection.get("income_label", "Income")
     employment_label = selection.get("employment_label", "Employment")
 

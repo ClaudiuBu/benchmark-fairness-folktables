@@ -730,10 +730,12 @@ def run_benchmark(config_path: str):
         results_by_year_path = output_dir / "benchmark_results_by_year.csv"
         results_by_year_df.to_csv(results_by_year_path, index=False)
 
-        # Include maintenance and sensitive_attribute_value in groupby if they exist
+        # Include maintenance, sensitive_attribute, and sensitive_attribute_value in groupby if they exist
         groupby_cols = ["year", "method"]
         if "maintenance" in results_by_year_df.columns:
             groupby_cols.append("maintenance")
+        if "sensitive_attribute" in results_by_year_df.columns:
+            groupby_cols.append("sensitive_attribute")
         if "sensitive_attribute_value" in results_by_year_df.columns:
             groupby_cols.append("sensitive_attribute_value")
         
