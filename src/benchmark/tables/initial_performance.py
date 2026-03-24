@@ -44,26 +44,25 @@ def generate_initial_performance_tables(results_path: str, output_dir: Path) -> 
     if not metrics:
         return (output_dir / "initial_performance_income.tex", output_dir / "initial_performance_employment.tex")
     
+    has_task_column = "task" in df.columns
+    
     for metric in metrics:
         label = METRIC_LABELS.get(metric, metric.replace("_", " ").title())
         row_income = {"Metric": label}
         row_employment = {"Metric": label}
         
         for method in ["baseline", "reweighing", "equalized_odds", "fairness_constraint"]:
-            method_data = df[df["method"] == method]
-            
-            if not method_data.empty:
-                val = _format_ci(method_data.iloc[0], metric)
+            if has_task_column:
+                income_data = df[(df["method"] == method) & (df["task"] == "income")]
+                employment_data = df[(df["method"] == method) & (df["task"] == "employment")]
             else:
-                val = "-"
+                income_data = df[df["method"] == method]
+                employment_data = df[df["method"] == method]
             
             col_name = method.replace("_", " ").title()
             
-            # Naive assumption: results come in same order for both tasks
-            # This works if config has income and employment tasks processed sequentially
-            # For robustness, ideally we'd have a task column in the summary
-            row_income[col_name] = val
-            row_employment[col_name] = val
+            row_income[col_name] = _format_ci(income_data.iloc[0], metric) if not income_data.empty else "-"
+            row_employment[col_name] = _format_ci(employment_data.iloc[0], metric) if not employment_data.empty else "-"
         
         rows_income.append(row_income)
         rows_employment.append(row_employment)

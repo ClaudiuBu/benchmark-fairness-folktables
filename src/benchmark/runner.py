@@ -380,8 +380,6 @@ def run_benchmark(config_path: str):
             X_train, X_val, X_test, y_train, y_val, y_test, A_train, A_val, A_test = stratified_split(
                 X_df.values, y_all, A_all, seed=seed, split=split
             )
-            # For static mode, we need to track X_df indices to match with feature columns
-            X_test_df_for_attrs = X_df.iloc[np.arange(len(X_df) - len(X_test), len(X_df))].reset_index(drop=True)
 
         scaler = StandardScaler()
         X_train = scaler.fit_transform(X_train)
