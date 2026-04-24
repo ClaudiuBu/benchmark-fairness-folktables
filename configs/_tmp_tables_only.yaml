@@ -1,0 +1,31 @@
+# Minimal config for table generation only
+# This runs 1 seed with 1 method on minimal data - fast enough to generate tables
+# without full benchmark overhead
+
+data:
+  mode: temporal
+  task: income
+  states: ["CA"]
+  train_years: [2014]
+  val_years: [2014]
+  test_years: [2015, 2016]
+  frequency: year
+  sensitive_attribute: SEX
+  max_samples: 5000  # Small sample for speed
+  max_samples_per_year: 2500
+
+experiment:
+  name: "Table generation only"
+
+methods:
+  - baseline
+
+seeds: [0]  # Single seed
+
+split: [0.6, 0.1, 0.3]
+
+maintenance_strategies:
+  - no-retrain
+
+output:
+  dir: results/folktables/tables_only

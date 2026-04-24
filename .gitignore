@@ -35,3 +35,10 @@ plots examples/
 .idea/
 *.swp
 *.swo
+
+#Unix
+.iunix_external_client.json
+.iunix_openhands_bridge.json
+.iunix_state.json
+.weaver_coordination.json
+.weaver_journal.json

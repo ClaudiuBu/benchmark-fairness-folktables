@@ -19,6 +19,7 @@ methods:
   - baseline
   - reweighing
   - equalized_odds
+  - demographic_parity
   - fairness_constraint
 
 maintenance_strategies:

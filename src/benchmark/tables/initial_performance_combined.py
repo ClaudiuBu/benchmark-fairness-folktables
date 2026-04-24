@@ -156,7 +156,9 @@ def generate_combined_initial_performance_table(config_path: str) -> Path:
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     latex_lines = [
-        "\\begin{tabular}{lcc}",
+        "\\setlength{\\tabcolsep}{4pt}",
+        "\\renewcommand{\\arraystretch}{1.08}",
+        "\\begin{tabular*}{\\textwidth}{@{\\extracolsep{\\fill}}lcc}",
         "\\toprule",
         "Metric & Income ($>$\\$50K) & Employment \\\\",
         "\\midrule",
@@ -179,7 +181,7 @@ def generate_combined_initial_performance_table(config_path: str) -> Path:
             f"DP Gap & {income_values['dp_gap_race']} & {employment_values['dp_gap_race']} \\\\",
             f"EO Gap & {income_values['eo_gap_race']} & {employment_values['eo_gap_race']} \\\\",
             "\\bottomrule",
-            "\\end{tabular}",
+            "\\end{tabular*}",
             "",
         ]
     )

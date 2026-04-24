@@ -18,6 +18,7 @@ data:
 methods:
   - baseline
   - equalized_odds
+  - demographic_parity
 
 maintenance_strategies:
   - "no-retrain"
