@@ -6,6 +6,15 @@ from sklearn.linear_model import SGDClassifier
 from src.fairness import demographic_parity, equalized_odds_gap
 
 
+__all__ = [
+    "make_model",
+    "kamiran_calders_weights",
+    "choose_thresholds_equalized_odds",
+    "choose_thresholds_demographic_parity",
+    "train_with_lagrangian",
+]
+
+
 def make_model(random_state: int) -> SGDClassifier:
     return SGDClassifier(
         loss="log_loss",
@@ -56,6 +65,34 @@ def choose_thresholds_equalized_odds(y_true, y_proba, A, grid):
             if best_gap is None or gap < best_gap or (np.isclose(gap, best_gap) and acc > best_acc):
                 best_gap = gap
                 best_acc = acc
+                best_t = {0: float(t0), 1: float(t1)}
+
+    return best_t
+
+
+def choose_thresholds_demographic_parity(y_proba, A, grid):
+    """Find group-specific thresholds that equalize acceptance rates (Demographic Parity).
+    
+    Demographic Parity: P(Ŷ=1|A=0) = P(Ŷ=1|A=1)
+    Minimizes DP gap without conditioning on true labels.
+    """
+    if len(np.unique(A)) < 2:
+        return {0: 0.5, 1: 0.5}
+
+    best_dp_gap = None
+    best_t = {0: 0.5, 1: 0.5}
+
+    for t0 in grid:
+        for t1 in grid:
+            y_pred = np.where(A == 0, y_proba >= t0, y_proba >= t1).astype(int)
+            
+            # Compute DP gap: |acceptance_rate_A0 - acceptance_rate_A1|
+            acc_rate_a0 = np.mean(y_pred[A == 0]) if np.any(A == 0) else 0.5
+            acc_rate_a1 = np.mean(y_pred[A == 1]) if np.any(A == 1) else 0.5
+            dp_gap = abs(acc_rate_a0 - acc_rate_a1)
+
+            if best_dp_gap is None or dp_gap < best_dp_gap:
+                best_dp_gap = dp_gap
                 best_t = {0: float(t0), 1: float(t1)}
 
     return best_t

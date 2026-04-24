@@ -20,6 +20,7 @@ from src.benchmark.methods import (
     make_model,
     kamiran_calders_weights,
     choose_thresholds_equalized_odds,
+    choose_thresholds_demographic_parity,
     train_with_lagrangian,
 )
 from src.benchmark.metrics import compute_metrics, METRIC_NAMES, METRIC_LABELS
@@ -148,6 +149,13 @@ def _train_method_on_data(method, X_train, y_train, A_train, X_val, y_val, A_val
         model.fit(X_train, y_train)
         y_val_proba = model.predict_proba(X_val)[:, 1]
         thresholds = choose_thresholds_equalized_odds(y_val, y_val_proba, A_val, grid=threshold_grid)
+        return model, thresholds
+    
+    elif method == "demographic_parity":
+        model = make_model(seed)
+        model.fit(X_train, y_train)
+        y_val_proba = model.predict_proba(X_val)[:, 1]
+        thresholds = choose_thresholds_demographic_parity(y_val_proba, A_val, grid=threshold_grid)
         return model, thresholds
     
     elif method == "fairness_constraint":
@@ -723,10 +731,6 @@ def run_benchmark(config_path: str):
     summary_path = output_dir / "benchmark_summary.csv"
     summary.to_csv(summary_path, index=False)
     
-    # Generate static plots for static benchmarks
-    if mode == "static":
-        plot_static_comparison(summary_ci, output_dir)
-
     if mode == "temporal" and results_by_year:
         results_by_year_df = pd.DataFrame(results_by_year)
         results_by_year_path = output_dir / "benchmark_results_by_year.csv"
@@ -751,8 +755,6 @@ def run_benchmark(config_path: str):
         summary_by_year_path = output_dir / "benchmark_summary_by_year.csv"
         summary_by_year.to_csv(summary_by_year_path, index=False)
 
-        plot_temporal_metrics(results_by_year_df, output_dir)
-        plot_temporal_comparison_by_year(results_by_year_df, output_dir)
         plot_original_vs_updated(results_by_year_df, output_dir)
         plot_original_vs_updated_by_attribute(results_by_year_df, output_dir)
 
@@ -846,3 +848,11 @@ def run_benchmark(config_path: str):
         print(f"  Initial performance table: {initial_table_path}")
     print(f"  Run history: {history_path}")
     print(f"  Elapsed time: {elapsed_minutes:.1f} min ({elapsed_seconds:.1f} s)")
+
+    # Return run metadata for external use
+    return {
+        "run_id": run_id,
+        "output_dir": str(output_dir),
+        "base_output_dir": str(base_output_dir),
+        "task": data_cfg.get("task", "unknown"),
+    }

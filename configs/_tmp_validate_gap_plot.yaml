@@ -1,34 +1,33 @@
 experiment:
-  name: "folktables_benchmark_temporal_employment_smoke"
+  name: "tmp_validate_gap_plot"
   type: "benchmark"
   data_type: "folktables"
 
 data:
-  task: "employment"
+  task: "income"
   states: ["CA"]
   mode: "temporal"
-  frequency: "quarter"
+  frequency: "year"
   train_years: [2014]
-  val_years: [2015]
-  test_years: [2016]
+  val_years: [2014]
+  test_years: [2014, 2015, 2016]
   sensitive_attribute: "SEX"
   max_samples: null
   max_samples_per_year: null
 
 methods:
   - baseline
-  - equalized_odds
-  - demographic_parity
 
 maintenance_strategies:
   - "no-retrain"
+  - "retrain"
 
 seeds: [0]
-threshold_grid: [0.3, 0.5, 0.7]
+threshold_grid: [0.5]
 
 fairness_constraint:
-  num_iters: 4
+  num_iters: 2
   lr: 0.1
 
 output:
-  dir: "results/folktables/benchmark_temporal_employment_smoke"
+  dir: "results/folktables/tmp_validate_gap_plot"

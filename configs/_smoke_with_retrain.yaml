@@ -1,10 +1,10 @@
 experiment:
-  name: "folktables_benchmark_temporal_employment_smoke"
+  name: "smoke_with_retrain"
   type: "benchmark"
   data_type: "folktables"
 
 data:
-  task: "employment"
+  task: "income"
   states: ["CA"]
   mode: "temporal"
   frequency: "quarter"
@@ -17,13 +17,13 @@ data:
 
 methods:
   - baseline
-  - equalized_odds
-  - demographic_parity
+  - reweighing
 
 maintenance_strategies:
   - "no-retrain"
+  - "retrain"
 
-seeds: [0]
+seeds: [0,1,2]
 threshold_grid: [0.3, 0.5, 0.7]
 
 fairness_constraint:
@@ -31,4 +31,4 @@ fairness_constraint:
   lr: 0.1
 
 output:
-  dir: "results/folktables/benchmark_temporal_employment_smoke"
+  dir: "results/folktables/smoke_with_retrain"

@@ -32,6 +32,25 @@ def _format_ci(row: pd.Series | None, metric: str) -> str:
     return f"{mean:.3f} [{lower:.3f}--{upper:.3f}]"
 
 
+def _format_metric_cells(metric: str, income_race_row, employment_race_row, income_sex_row, employment_sex_row):
+    # O/E gap is interpreted as sex-based in this combined table layout.
+    # Keep race-side cells explicitly N/A and visually de-emphasized.
+    if metric == "oe_gap":
+        return (
+            "\\cellcolor{gray!15}--",
+            "\\cellcolor{gray!15}--",
+            _format_ci(income_sex_row, metric),
+            _format_ci(employment_sex_row, metric),
+        )
+
+    return (
+        _format_ci(income_race_row, metric),
+        _format_ci(employment_race_row, metric),
+        _format_ci(income_sex_row, metric),
+        _format_ci(employment_sex_row, metric),
+    )
+
+
 def _resolve_latest_output_dir(base_dir: Path) -> Path:
     history_path = base_dir / "run_history.csv"
     if history_path.exists():
@@ -111,12 +130,20 @@ def generate_fairness_gap_combined_table(config_path: str) -> Path:
 
     table_rows: list[tuple[str, str, str, str, str]] = []
     for metric in metrics:
+        race_income, race_employment, sex_income, sex_employment = _format_metric_cells(
+            metric,
+            income_race_row,
+            employment_race_row,
+            income_sex_row,
+            employment_sex_row,
+        )
+
         row = (
             METRIC_LABELS.get(metric, metric.replace("_", " ").title()),
-            _format_ci(income_race_row, metric),
-            _format_ci(employment_race_row, metric),
-            _format_ci(income_sex_row, metric),
-            _format_ci(employment_sex_row, metric),
+            race_income,
+            race_employment,
+            sex_income,
+            sex_employment,
         )
         if drop_fully_missing_metrics and all(cell == "-" for cell in row[1:]):
             continue
@@ -128,7 +155,9 @@ def generate_fairness_gap_combined_table(config_path: str) -> Path:
     employment_label = selection.get("employment_label", "Employment")
 
     latex_lines = [
-        "\\begin{tabular}{lcccc}",
+        "\\setlength{\\tabcolsep}{4pt}",
+        "\\renewcommand{\\arraystretch}{1.08}",
+        "\\begin{tabular*}{\\textwidth}{@{\\extracolsep{\\fill}}lcccc}",
         "\\toprule",
         f" & \\multicolumn{{2}}{{c}}{{{race_label}}} & \\multicolumn{{2}}{{c}}{{{sex_label}}} \\\\",
         "\\cmidrule(lr){2-3} \\cmidrule(lr){4-5}",
@@ -139,7 +168,7 @@ def generate_fairness_gap_combined_table(config_path: str) -> Path:
     for row in table_rows:
         latex_lines.append(f"{row[0]} & {row[1]} & {row[2]} & {row[3]} & {row[4]} \\\\")
 
-    latex_lines.extend(["\\bottomrule", "\\end{tabular}", ""])
+    latex_lines.extend(["\\bottomrule", "\\end{tabular*}", ""])
 
     output_path = Path(output_cfg["path"])
     output_path.parent.mkdir(parents=True, exist_ok=True)

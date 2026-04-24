@@ -1,0 +1,16 @@
+# Standalone config for cohort table generation only
+# This generates the descriptive population table (N, %, demographics)
+# without any benchmark training or results CSVs
+
+data:
+  task: income
+  states: ["CA"]
+  train_years: [2014]
+  val_years: [2014]
+  test_years: [2015, 2016, 2017, 2018]
+  sensitive_attribute: SEX
+  mode: temporal
+  max_samples: 20000  # Full sample for realistic descriptive stats
+
+output:
+  dir: results/folktables/cohort_table_only

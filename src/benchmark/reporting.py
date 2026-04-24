@@ -250,8 +250,29 @@ def plot_static_comparison(summary_ci: pd.DataFrame, output_dir: Path):
     """Plot static method comparison as bar charts."""
     _apply_paper_style()
     output_dir.mkdir(parents=True, exist_ok=True)
+
+    plot_df = summary_ci.copy()
+
+    # Reduce clutter for paper plots: keep one maintenance strategy and one attribute.
+    if "maintenance" in plot_df.columns:
+        if (plot_df["maintenance"] == "no-retrain").any():
+            plot_df = plot_df[plot_df["maintenance"] == "no-retrain"]
+        else:
+            first_maintenance = sorted(plot_df["maintenance"].dropna().unique())[0]
+            plot_df = plot_df[plot_df["maintenance"] == first_maintenance]
+
+    if "sensitive_attribute" in plot_df.columns and not plot_df["sensitive_attribute"].dropna().empty:
+        preferred_attrs = ["RAC1P", "SEX"]
+        available_attrs = set(plot_df["sensitive_attribute"].dropna().unique())
+        chosen_attr = next((attr for attr in preferred_attrs if attr in available_attrs), None)
+        if chosen_attr is None:
+            chosen_attr = sorted(available_attrs)[0]
+        plot_df = plot_df[plot_df["sensitive_attribute"] == chosen_attr]
+
+    if "method" in plot_df.columns:
+        plot_df = plot_df.sort_values("method").drop_duplicates(subset=["method"], keep="first")
     
-    metrics = _available_summary_metrics(summary_ci)
+    metrics = _available_summary_metrics(plot_df)
     if not metrics:
         return
 
@@ -260,7 +281,7 @@ def plot_static_comparison(summary_ci: pd.DataFrame, output_dir: Path):
     fig, axes = plt.subplots(n_rows, n_cols, figsize=(7 * n_cols, 4.5 * n_rows), dpi=300)
     axes = np.atleast_1d(axes).flatten()
     
-    colors = sns.color_palette("muted", n_colors=len(summary_ci))
+    colors = sns.color_palette("muted", n_colors=len(plot_df))
     
     for idx, metric in enumerate(metrics):
         ax = axes[idx]
@@ -269,13 +290,13 @@ def plot_static_comparison(summary_ci: pd.DataFrame, output_dir: Path):
         ci_lower_col = f"{metric}_ci_lower"
         ci_upper_col = f"{metric}_ci_upper"
         
-        if mean_col not in summary_ci.columns:
+        if mean_col not in plot_df.columns:
             continue
         
-        x_pos = np.arange(len(summary_ci))
-        means = summary_ci[mean_col].values
-        errors_lower = (means - summary_ci[ci_lower_col].values)
-        errors_upper = (summary_ci[ci_upper_col].values - means)
+        x_pos = np.arange(len(plot_df))
+        means = plot_df[mean_col].values
+        errors_lower = (means - plot_df[ci_lower_col].values)
+        errors_upper = (plot_df[ci_upper_col].values - means)
         
         ax.bar(
             x_pos,
@@ -289,7 +310,7 @@ def plot_static_comparison(summary_ci: pd.DataFrame, output_dir: Path):
         )
         
         ax.set_xticks(x_pos)
-        ax.set_xticklabels([m.replace('_', ' ').title() for m in summary_ci['method']], 
+        ax.set_xticklabels([m.replace('_', ' ').title() for m in plot_df['method']], 
                            rotation=45, ha='right')
         metric_label = METRIC_LABELS.get(metric, metric.replace("_", " ").title())
         ax.set_ylabel(metric_label)
@@ -496,14 +517,17 @@ def plot_original_vs_updated(results_by_year_df, output_dir):
         "sensitive_attribute" in results_by_year_df.columns
         and results_by_year_df["sensitive_attribute"].nunique() > 1
     )
-    general_metrics = [metric for metric in metrics if metric not in GAP_METRICS] if has_multiple_attributes else metrics
+    preferred_general_metrics = ["accuracy", "f1_score", "auc"]
+    general_metrics = [metric for metric in preferred_general_metrics if metric in metrics]
+    if not general_metrics:
+        general_metrics = [metric for metric in metrics if metric not in GAP_METRICS] if has_multiple_attributes else metrics
     if not general_metrics:
         return
 
     def _build_original_vs_updated_figure(plot_data: pd.DataFrame, title_suffix: str, metrics_to_plot: list[str]):
-        n_cols = 2 if len(metrics_to_plot) > 1 else 1
+        n_cols = min(3, len(metrics_to_plot)) if len(metrics_to_plot) > 1 else 1
         n_rows = int(np.ceil(len(metrics_to_plot) / n_cols))
-        fig, axes = plt.subplots(n_rows, n_cols, figsize=(7 * n_cols, 4.5 * n_rows), dpi=200)
+        fig, axes = plt.subplots(n_rows, n_cols, figsize=(5.2 * n_cols, 4.1 * n_rows), dpi=200)
         axes = np.atleast_1d(axes).flatten()
 
         colors = {"no-retrain": "#6E6E6E", "retrain": "#2C7FB8"}
@@ -525,10 +549,10 @@ def plot_original_vs_updated(results_by_year_df, output_dir):
                 cis = np.nan_to_num(data_m["ci"].values, nan=0.0)
 
                 line_style = "-" if maintenance == "retrain" else "--"
-                label = "Updated model" if maintenance == "retrain" else "Original model"
+                label = "Updated" if maintenance == "retrain" else "Original"
 
-                ax.plot(years, means, linewidth=2.0, linestyle=line_style, color=colors[maintenance], label=label)
-                ax.fill_between(years, means - cis, means + cis, color=colors[maintenance], alpha=0.15)
+                ax.plot(years, means, linewidth=2.3, linestyle=line_style, color=colors[maintenance], label=label)
+                ax.fill_between(years, means - cis, means + cis, color=colors[maintenance], alpha=0.10)
 
             if years_sorted:
                 first_period = years_sorted[0]
@@ -543,16 +567,15 @@ def plot_original_vs_updated(results_by_year_df, output_dir):
                         color="#333333",
                         linestyle=":",
                         linewidth=1.2,
-                        label="Initial performance",
+                        label="Initial",
                     )
 
             _apply_period_ticks(ax, years_sorted, label="Year")
-            metric_label = METRIC_LABELS.get(metric, metric.replace("_", " ").title())
-            ax.set_ylabel(metric_label)
-            ax.set_title(metric_label)
+            ax.set_ylabel("")
             ax.grid(True)
+            ax.tick_params(axis="both", labelsize=8)
             handles, labels = ax.get_legend_handles_labels()
-            preferred_order = ["Initial performance", "Original model", "Updated model"]
+            preferred_order = ["Initial", "Original", "Updated"]
             ordered = [
                 (handles[labels.index(label)], label)
                 for label in preferred_order
@@ -572,7 +595,6 @@ def plot_original_vs_updated(results_by_year_df, output_dir):
         for ax in axes[len(metrics_to_plot):]:
             ax.remove()
 
-        fig.suptitle(f"Original vs Updated Models{title_suffix}", y=1.02)
         fig.tight_layout()
         return fig
 
@@ -587,6 +609,21 @@ def plot_original_vs_updated(results_by_year_df, output_dir):
     combined_general_path = _plot_output_path(output_dir, "original_vs_updated_combined", "original_vs_updated_general.png")
     _save_figure(general_fig, combined_general_path)
     plt.close(general_fig)
+
+    # Also export one panel per metric for paper layouts (metric rows, task columns).
+    for metric in general_metrics:
+        metric_fig = _build_original_vs_updated_figure(
+            results_by_year_df,
+            "",
+            [metric],
+        )
+        metric_path = _plot_output_path(
+            output_dir,
+            "original_vs_updated_metrics",
+            f"temporal_original_vs_updated_{metric}.png",
+        )
+        _save_figure(metric_fig, metric_path)
+        plt.close(metric_fig)
 
     # Generate separate plots for each sensitive attribute (cannot average gap metrics across attributes)
     attributes = sorted(results_by_year_df["sensitive_attribute"].unique()) if "sensitive_attribute" in results_by_year_df.columns else [None]
@@ -636,6 +673,11 @@ def plot_original_vs_updated_by_attribute(results_by_year_df, output_dir):
         return
     
     metrics = _available_results_metrics(results_by_year_df)
+    if not metrics:
+        return
+
+    preferred_metrics = ["accuracy", "f1_score", "auc", "dp_gap", "eo_gap"]
+    metrics = [metric for metric in preferred_metrics if metric in metrics]
     if not metrics:
         return
     
@@ -695,8 +737,8 @@ def plot_original_vs_updated_by_attribute(results_by_year_df, output_dir):
                         label = "Updated model" if maintenance == "retrain" else "Original model"
                         color = maintenance_colors.get(maintenance, "#2C7FB8")
 
-                        ax.plot(years, means, linewidth=2.0, linestyle=line_style, color=color, label=label)
-                        ax.fill_between(years, means - cis, means + cis, color=color, alpha=0.15)
+                        ax.plot(years, means, linewidth=2.3, linestyle=line_style, color=color, label=label)
+                        ax.fill_between(years, means - cis, means + cis, color=color, alpha=0.10)
                         plotted_any = True
             else:
                 # Non-gap metrics: keep subgroup-level lines, excluding ALL rows
@@ -738,8 +780,8 @@ def plot_original_vs_updated_by_attribute(results_by_year_df, output_dir):
                         maintenance_label = "Updated" if maintenance == "retrain" else "Original"
                         label = f"{value_label} - {maintenance_label}"
 
-                        ax.plot(years, means, linewidth=2.0, linestyle=line_style, color=base_color, label=label)
-                        ax.fill_between(years, means - cis, means + cis, color=base_color, alpha=0.15)
+                        ax.plot(years, means, linewidth=2.3, linestyle=line_style, color=base_color, label=label)
+                        ax.fill_between(years, means - cis, means + cis, color=base_color, alpha=0.10)
                         plotted_any = True
             
             # Baseline initial performance from first period (averaged across all values)
@@ -763,12 +805,16 @@ def plot_original_vs_updated_by_attribute(results_by_year_df, output_dir):
             
             _apply_period_ticks(ax, years_sorted, label="Year")
             metric_label = METRIC_LABELS.get(metric, metric.replace("_", " ").title())
-            ax.set_ylabel(metric_label)
+            if metric in GAP_METRICS:
+                ax.set_ylabel(metric_label)
+            else:
+                ax.set_ylabel("")
             
             # Use readable attribute name (RAC1P -> RACE)
             attr_display_name = ATTRIBUTE_NAME_LABELS.get(attr_name, attr_name)
             ax.set_title(f"{attr_display_name}")
             ax.grid(True)
+            ax.tick_params(axis="both", labelsize=8)
             
             if plotted_any:
                 # Organize legend in 3 columns:
@@ -868,8 +914,6 @@ def plot_original_vs_updated_by_attribute(results_by_year_df, output_dir):
         for ax in axes[n_attrs:]:
             ax.remove()
         
-        metric_label = METRIC_LABELS.get(metric, metric.replace("_", " ").title())
-        fig.suptitle(f"{metric_label} - Original vs Updated Models by Attribute", y=1.02)
         fig.tight_layout()
         
         plot_path = _plot_output_path(output_dir, "original_vs_updated_by_attribute", f"temporal_original_vs_updated_by_attribute_{metric}.png")
