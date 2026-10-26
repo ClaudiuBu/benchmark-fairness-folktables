@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pandas as pd
 import yaml
+from scipy import stats
 
 from src.benchmark.metrics import METRIC_LABELS
 
@@ -53,6 +54,53 @@ def _resolve_latest_output_dir(base_dir: Path) -> Path:
     return run_dirs[-1]
 
 
+def _summarize_initial_rows(run_dir: Path) -> pd.DataFrame:
+    """Summarize explicit 2014 baseline rows from benchmark_results_by_year.csv."""
+    results_by_year_path = run_dir / "benchmark_results_by_year.csv"
+    if not results_by_year_path.exists():
+        raise FileNotFoundError(f"Missing file: {results_by_year_path}")
+
+    df = pd.read_csv(results_by_year_path)
+    if "phase" in df.columns:
+        df = df[df["phase"] == "baseline"].copy()
+    else:
+        df = df[df["year"] == df["year"].min()].copy()
+
+    if "maintenance" in df.columns:
+        df = df[df["maintenance"] == "no-retrain"].copy()
+    if "sensitive_attribute_value" in df.columns:
+        df = df[df["sensitive_attribute_value"].astype(str) == "ALL"].copy()
+
+    group_cols = [
+        col for col in ["method", "maintenance", "task", "sensitive_attribute"] if col in df.columns
+    ]
+    numeric_cols = [
+        col for col in df.select_dtypes(include="number").columns if col not in {"seed", "year"}
+    ]
+
+    rows = []
+    for group_vals, group_df in df.groupby(group_cols, sort=True):
+        if not isinstance(group_vals, tuple):
+            group_vals = (group_vals,)
+        row = {col: group_vals[idx] for idx, col in enumerate(group_cols)}
+        for metric in numeric_cols:
+            values = pd.to_numeric(group_df[metric], errors="coerce").dropna().values
+            if len(values) == 0:
+                continue
+            mean = float(values.mean())
+            if len(values) < 2:
+                ci_range = 0.0
+            else:
+                stderr = stats.sem(values, nan_policy="omit")
+                ci_range = 0.0 if pd.isna(stderr) else float(stderr * stats.t.ppf(0.975, len(values) - 1))
+            row[f"{metric}_mean"] = mean
+            row[f"{metric}_ci_lower"] = mean - ci_range
+            row[f"{metric}_ci_upper"] = mean + ci_range
+        rows.append(row)
+
+    return pd.DataFrame(rows)
+
+
 def _pick_row(df: pd.DataFrame, method: str, maintenance: str | None, sensitive_attribute: str | None) -> pd.Series | None:
     subset = df[df["method"] == method].copy() if "method" in df.columns else df.copy()
 
@@ -68,14 +116,14 @@ def _pick_row(df: pd.DataFrame, method: str, maintenance: str | None, sensitive_
 
 
 def _build_task_values(
-    summary_ci_path: Path,
+    summary_ci: pd.DataFrame,
     method: str,
     maintenance: str | None,
     sex_attr: str,
     race_attr: str,
     performance_metrics: list[str],
 ) -> dict[str, str]:
-    df = pd.read_csv(summary_ci_path)
+    df = summary_ci
 
     values: dict[str, str] = {}
 
@@ -127,13 +175,8 @@ def generate_combined_initial_performance_table(config_path: str) -> Path:
     income_run_dir = _resolve_latest_output_dir(income_base_dir)
     employment_run_dir = _resolve_latest_output_dir(employment_base_dir)
 
-    income_summary_ci = income_run_dir / "benchmark_summary_ci.csv"
-    employment_summary_ci = employment_run_dir / "benchmark_summary_ci.csv"
-
-    if not income_summary_ci.exists():
-        raise FileNotFoundError(f"Missing file: {income_summary_ci}")
-    if not employment_summary_ci.exists():
-        raise FileNotFoundError(f"Missing file: {employment_summary_ci}")
+    income_summary_ci = _summarize_initial_rows(income_run_dir)
+    employment_summary_ci = _summarize_initial_rows(employment_run_dir)
 
     income_values = _build_task_values(
         income_summary_ci,

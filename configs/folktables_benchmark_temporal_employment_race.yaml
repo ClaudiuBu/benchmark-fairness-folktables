@@ -1,0 +1,54 @@
+experiment:
+  name: "folktables_benchmark_temporal_employment_race"
+  type: "benchmark"
+  data_type: "folktables"
+
+data:
+  task: "employment"
+  states: ["CA"]
+  mode: "temporal"
+  frequency: "within_year_fold"
+  train_years: [2014]
+  val_years: [2014]
+  test_years: [2014, 2015, 2016, 2017, 2018]
+  sensitive_attribute: "RAC1P"
+  max_samples: null
+  max_samples_per_year: null
+
+methods:
+  - baseline
+  - reweighing
+  - equalized_odds
+  - demographic_parity
+  - fairness_constraint
+
+maintenance_strategies:
+  - "no-retrain"
+  - "cumulative-retrain"
+  - "last-year-retrain"
+  - "threshold-recalibration"
+  - "cumulative-retrain-fixed-n"
+
+seeds: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
+threshold_grid: [0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90, 0.95]
+
+threshold_selection:
+  max_accuracy_drop: 0.05
+  max_f1_drop: 0.10
+  min_positive_rate: 0.01
+  min_positive_rate_ratio: 0.25
+  fallback_to_baseline: true
+
+postprocessing:
+  backend: "fairlearn_threshold_optimizer"
+  objective: "balanced_accuracy_score"
+  grid_size: 100
+
+fairness_constraint:
+  backend: "fairlearn_reductions"
+  constraint: "demographic_parity"
+  eps: 0.02
+  max_iter: 50
+
+output:
+  dir: "results/folktables/benchmark_temporal_employment_race"

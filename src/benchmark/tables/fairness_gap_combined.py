@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pandas as pd
 import yaml
+from scipy import stats
 
 from src.benchmark.metrics import METRIC_LABELS
 
@@ -33,16 +34,6 @@ def _format_ci(row: pd.Series | None, metric: str) -> str:
 
 
 def _format_metric_cells(metric: str, income_race_row, employment_race_row, income_sex_row, employment_sex_row):
-    # O/E gap is interpreted as sex-based in this combined table layout.
-    # Keep race-side cells explicitly N/A and visually de-emphasized.
-    if metric == "oe_gap":
-        return (
-            "\\cellcolor{gray!15}--",
-            "\\cellcolor{gray!15}--",
-            _format_ci(income_sex_row, metric),
-            _format_ci(employment_sex_row, metric),
-        )
-
     return (
         _format_ci(income_race_row, metric),
         _format_ci(employment_race_row, metric),
@@ -75,6 +66,53 @@ def _resolve_latest_output_dir(base_dir: Path) -> Path:
     return run_dirs[-1]
 
 
+def _summarize_initial_rows(run_dir: Path) -> pd.DataFrame:
+    """Summarize explicit 2014 baseline rows from benchmark_results_by_year.csv."""
+    results_by_year_path = run_dir / "benchmark_results_by_year.csv"
+    if not results_by_year_path.exists():
+        raise FileNotFoundError(f"Missing file: {results_by_year_path}")
+
+    df = pd.read_csv(results_by_year_path)
+    if "phase" in df.columns:
+        df = df[df["phase"] == "baseline"].copy()
+    else:
+        df = df[df["year"] == df["year"].min()].copy()
+
+    if "maintenance" in df.columns:
+        df = df[df["maintenance"] == "no-retrain"].copy()
+    if "sensitive_attribute_value" in df.columns:
+        df = df[df["sensitive_attribute_value"].astype(str) == "ALL"].copy()
+
+    group_cols = [
+        col for col in ["method", "maintenance", "task", "sensitive_attribute"] if col in df.columns
+    ]
+    numeric_cols = [
+        col for col in df.select_dtypes(include="number").columns if col not in {"seed", "year"}
+    ]
+
+    rows = []
+    for group_vals, group_df in df.groupby(group_cols, sort=True):
+        if not isinstance(group_vals, tuple):
+            group_vals = (group_vals,)
+        row = {col: group_vals[idx] for idx, col in enumerate(group_cols)}
+        for metric in numeric_cols:
+            values = pd.to_numeric(group_df[metric], errors="coerce").dropna().values
+            if len(values) == 0:
+                continue
+            mean = float(values.mean())
+            if len(values) < 2:
+                ci_range = 0.0
+            else:
+                stderr = stats.sem(values, nan_policy="omit")
+                ci_range = 0.0 if pd.isna(stderr) else float(stderr * stats.t.ppf(0.975, len(values) - 1))
+            row[f"{metric}_mean"] = mean
+            row[f"{metric}_ci_lower"] = mean - ci_range
+            row[f"{metric}_ci_upper"] = mean + ci_range
+        rows.append(row)
+
+    return pd.DataFrame(rows)
+
+
 def _pick_row(
     df: pd.DataFrame,
     method: str,
@@ -96,10 +134,7 @@ def _pick_row(
 
 def _load_summary_ci(base_dir: str) -> pd.DataFrame:
     run_dir = _resolve_latest_output_dir(Path(base_dir))
-    summary_ci_path = run_dir / "benchmark_summary_ci.csv"
-    if not summary_ci_path.exists():
-        raise FileNotFoundError(f"Missing file: {summary_ci_path}")
-    return pd.read_csv(summary_ci_path)
+    return _summarize_initial_rows(run_dir)
 
 
 def generate_fairness_gap_combined_table(config_path: str) -> Path:

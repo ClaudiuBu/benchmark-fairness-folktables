@@ -37,6 +37,9 @@ def generate_initial_performance_tables(results_path: str, output_dir: Path) -> 
         # Use only no-retrain (initial models)
         df = df[df["maintenance"] == "no-retrain"].copy()
     
+    if "task" not in df.columns:
+        raise ValueError("Expected a 'task' column in the summary results.")
+
     rows_income = []
     rows_employment = []
     
@@ -49,21 +52,13 @@ def generate_initial_performance_tables(results_path: str, output_dir: Path) -> 
         row_income = {"Metric": label}
         row_employment = {"Metric": label}
         
-        for method in ["baseline", "reweighing", "equalized_odds", "fairness_constraint"]:
-            method_data = df[df["method"] == method]
-            
-            if not method_data.empty:
-                val = _format_ci(method_data.iloc[0], metric)
-            else:
-                val = "-"
+        for method in ["baseline", "reweighing", "demographic_parity", "equalized_odds", "fairness_constraint"]:
+            income_method = df[(df["task"] == "income") & (df["method"] == method)]
+            employment_method = df[(df["task"] == "employment") & (df["method"] == method)]
             
             col_name = method.replace("_", " ").title()
-            
-            # Naive assumption: results come in same order for both tasks
-            # This works if config has income and employment tasks processed sequentially
-            # For robustness, ideally we'd have a task column in the summary
-            row_income[col_name] = val
-            row_employment[col_name] = val
+            row_income[col_name] = _format_ci(income_method.iloc[0], metric) if not income_method.empty else "-"
+            row_employment[col_name] = _format_ci(employment_method.iloc[0], metric) if not employment_method.empty else "-"
         
         rows_income.append(row_income)
         rows_employment.append(row_employment)

@@ -2,18 +2,23 @@
 """
 Full benchmark runner for both Income and Employment tasks.
 Runs temporal fairness benchmarks with all methods and seeds.
-Then generates fairness gap tables and syncs plots to paper.
+Then regenerates the data-audit, fairness-gap, initial-performance and final-delta tables.
 
 Usage:
     python run_full_benchmark.py
+    python run_full_benchmark.py --resume-completed
 """
 
+import argparse
+import json
 import sys
 import time
 import subprocess
 import re
 from pathlib import Path
 from datetime import datetime
+
+import yaml
 
 from src.benchmark.runner import run_benchmark
 
@@ -78,8 +83,92 @@ def update_latex_with_run_ids(latex_file: Path, run_ids: dict) -> bool:
         return False
 
 
-def main():
+def _resolve_benchmark_base_dir(project_root: Path, config_path: Path) -> tuple[Path, dict]:
+    """Return the base directory where runs for a config are stored."""
+    with open(config_path, "r") as f:
+        config = yaml.safe_load(f)
+
+    output_cfg = config["output"]
+    configured_output_dir = Path(output_cfg["dir"])
+    if not configured_output_dir.is_absolute():
+        configured_output_dir = project_root / configured_output_dir
+
+    config_stem = config_path.stem
+    group_by_config = bool(output_cfg.get("group_by_config", True))
+    if group_by_config and configured_output_dir.name != config_stem:
+        base_output_dir = configured_output_dir / config_stem
+    else:
+        base_output_dir = configured_output_dir
+
+    return base_output_dir, config
+
+
+def _is_completed_run_dir(run_dir: Path, mode: str) -> bool:
+    """Check whether a run directory contains the final benchmark outputs."""
+    required = [
+        "benchmark_results.csv",
+        "benchmark_summary.csv",
+        "benchmark_summary_ci.csv",
+        "run_meta.json",
+    ]
+    if mode == "temporal":
+        required.extend(["benchmark_results_by_year.csv", "benchmark_summary_by_year.csv"])
+    return all((run_dir / filename).exists() for filename in required)
+
+
+def _latest_completed_run_metadata(project_root: Path, config_path: Path) -> dict | None:
+    """Find metadata for the most recent completed run for a config."""
+    base_output_dir, config = _resolve_benchmark_base_dir(project_root, config_path)
+    mode = config["data"].get("mode", "static")
+    timestamped_runs = bool(config["output"].get("timestamped_runs", True))
+
+    if not base_output_dir.exists():
+        return None
+
+    if timestamped_runs:
+        candidates = [path for path in base_output_dir.iterdir() if path.is_dir()]
+    else:
+        candidates = [base_output_dir]
+
+    candidates = sorted(candidates, key=lambda path: path.stat().st_mtime, reverse=True)
+    for run_dir in candidates:
+        if not _is_completed_run_dir(run_dir, mode):
+            continue
+
+        meta_path = run_dir / "run_meta.json"
+        try:
+            with open(meta_path, "r") as f:
+                meta = json.load(f)
+        except Exception:
+            meta = {}
+
+        meta.setdefault("run_id", run_dir.name)
+        meta.setdefault("config_path", str(config_path))
+        meta.setdefault("base_output_dir", str(base_output_dir))
+        meta.setdefault("output_dir", str(run_dir))
+        meta.setdefault("experiment", config["experiment"]["name"])
+        meta.setdefault("results", str(run_dir / "benchmark_results.csv"))
+        meta.setdefault("summary", str(run_dir / "benchmark_summary.csv"))
+        return meta
+
+    return None
+
+
+def main(argv: list[str] | None = None):
     """Run full benchmarks for both income and employment tasks."""
+    parser = argparse.ArgumentParser(
+        description="Run the full Folktables benchmark and regenerate paper artifacts."
+    )
+    parser.add_argument(
+        "--resume-completed",
+        action="store_true",
+        help=(
+            "Skip any configuration whose latest output directory already contains "
+            "complete benchmark CSVs and run metadata. This resumes at config granularity, "
+            "not inside a partially interrupted config."
+        ),
+    )
+    args = parser.parse_args(argv)
     
     project_root = Path(__file__).parent
     sys.path.insert(0, str(project_root))
@@ -89,12 +178,26 @@ def main():
         {
             "name": "Income (Temporal)",
             "path": "configs/folktables_benchmark_temporal.yaml",
-            "description": "Income prediction task with temporal evaluation"
+            "description": "Income prediction task with temporal evaluation",
+            "latex_task": "income",
         },
         {
             "name": "Employment (Temporal)",
             "path": "configs/folktables_benchmark_temporal_employment.yaml",
-            "description": "Employment status prediction task with temporal evaluation"
+            "description": "Employment status prediction task with temporal evaluation",
+            "latex_task": "employment",
+        },
+        {
+            "name": "Income (Temporal, race-targeted)",
+            "path": "configs/folktables_benchmark_temporal_race.yaml",
+            "description": "Income prediction task with RAC1P as the fairness target",
+            "latex_task": None,
+        },
+        {
+            "name": "Employment (Temporal, race-targeted)",
+            "path": "configs/folktables_benchmark_temporal_employment_race.yaml",
+            "description": "Employment status prediction task with RAC1P as the fairness target",
+            "latex_task": None,
         }
     ]
     
@@ -126,6 +229,24 @@ def main():
                 "duration": 0
             })
             continue
+
+        if args.resume_completed:
+            completed_meta = _latest_completed_run_metadata(project_root, config_path)
+            if completed_meta:
+                print("⏭️  Completed run found; reusing existing output")
+                print(f"   Run ID: {completed_meta.get('run_id', 'unknown')}")
+                print(f"   Output: {completed_meta.get('output_dir', 'unknown')}")
+
+                if config.get("latex_task"):
+                    run_ids[config["latex_task"]] = completed_meta
+
+                results.append({
+                    "task": config["name"],
+                    "status": "SKIPPED",
+                    "error": None,
+                    "duration": 0,
+                })
+                continue
         
         try:
             task_start = time.time()
@@ -141,9 +262,8 @@ def main():
             print(f"⏱️  Duration: {task_duration/3600:.2f} hours ({task_duration/60:.1f} minutes)")
             
             # Store run metadata for LaTeX update
-            if run_metadata:
-                task_key = run_metadata.get('task', 'unknown')
-                run_ids[task_key] = run_metadata
+            if run_metadata and config.get("latex_task"):
+                run_ids[config["latex_task"]] = run_metadata
             
             results.append({
                 "task": config["name"],
@@ -173,7 +293,12 @@ def main():
     total_duration = time.time() - total_start
     
     for result in results:
-        status_icon = "✅" if result["status"] == "SUCCESS" else "❌"
+        if result["status"] == "SUCCESS":
+            status_icon = "✅"
+        elif result["status"] == "SKIPPED":
+            status_icon = "⏭️"
+        else:
+            status_icon = "❌"
         duration_str = f"{result['duration']/3600:.2f}h" if result['duration'] >= 3600 else f"{result['duration']/60:.1f}m"
         print(f"{status_icon} {result['task']:30s} [{duration_str:>8s}] {result['status']}")
         if result['error']:
@@ -197,15 +322,44 @@ def main():
     if run_ids:
         latex_file = project_root / "paper" / "articol.tex"
         if latex_file.exists():
-            update_latex_with_run_ids(latex_file, run_ids)
+            if not update_latex_with_run_ids(latex_file, run_ids):
+                return 1
         else:
-            print(f"⚠️  LaTeX file not found: {latex_file}")
+            print(f"ℹ️  {latex_file} not present. Skipping LaTeX run-ID update.")
     else:
         print("⚠️  No run IDs captured, skipping LaTeX update")
+        return 1
     
-    # Step 2: Generate fairness gap tables
+    # Step 2: Generate data audit tables
     print(f"\n{'='*80}")
-    print("STEP 2: Generate Fairness Gap Tables")
+    print("STEP 2: Generate Data Audit Tables")
+    print(f"{'='*80}")
+    print()
+
+    try:
+        print("⏱️  Generating data audit tables...")
+        audit_config = project_root / "configs/data_audit.yaml"
+
+        if audit_config.exists():
+            subprocess.run(
+                [sys.executable, "-m", "src.benchmark.tables.data_audit", str(audit_config)],
+                cwd=str(project_root),
+                check=True,
+            )
+            print("✅ Data audit tables generated successfully")
+        else:
+            print(f"⚠️  Config not found: {audit_config}. Skipping data audit tables.")
+            return 1
+    except subprocess.CalledProcessError as e:
+        print(f"⚠️  Data audit table generation failed: {e}")
+        return 1
+    except Exception as e:
+        print(f"⚠️  Error during data audit table generation: {e}")
+        return 1
+
+    # Step 3: Generate fairness gap tables
+    print(f"\n{'='*80}")
+    print("STEP 3: Generate Fairness Gap Tables")
     print(f"{'='*80}")
     print()
     
@@ -222,12 +376,15 @@ def main():
             print("✅ Fairness gap tables generated successfully")
         else:
             print(f"⚠️  Config not found: {fairness_config}. Skipping fairness gap tables.")
+            return 1
     except subprocess.CalledProcessError as e:
         print(f"⚠️  Fairness gap tables generation failed: {e}")
+        return 1
     except Exception as e:
         print(f"⚠️  Error during fairness gap tables generation: {e}")
+        return 1
     
-    # Step 2b: Generate initial performance combined table
+    # Step 3b: Generate initial performance combined table
     print()
     try:
         print("⏱️  Generating initial performance combined table...")
@@ -242,12 +399,38 @@ def main():
             print("✅ Initial performance table generated successfully")
         else:
             print(f"⚠️  Config not found: {perf_config}. Skipping initial performance table.")
+            return 1
     except subprocess.CalledProcessError as e:
         print(f"⚠️  Initial performance table generation failed: {e}")
+        return 1
     except Exception as e:
         print(f"⚠️  Error during initial performance table generation: {e}")
+        return 1
 
-    # Step 2c: Generate cohort tables for article inputs
+    # Step 3c: Generate final temporal delta summary table
+    print()
+    try:
+        print("⏱️  Generating final temporal delta summary table...")
+        delta_config = project_root / "configs/final_delta_summary.yaml"
+
+        if delta_config.exists():
+            subprocess.run(
+                [sys.executable, "-m", "src.benchmark.tables.final_delta_summary", str(delta_config)],
+                cwd=str(project_root),
+                check=True,
+            )
+            print("✅ Final delta summary table generated successfully")
+        else:
+            print(f"⚠️  Config not found: {delta_config}. Skipping final delta summary table.")
+            return 1
+    except subprocess.CalledProcessError as e:
+        print(f"⚠️  Final delta summary table generation failed: {e}")
+        return 1
+    except Exception as e:
+        print(f"⚠️  Error during final delta summary table generation: {e}")
+        return 1
+
+    # Step 3d: Generate cohort tables for article inputs
     print()
     try:
         print("⏱️  Generating cohort tables...")
@@ -263,15 +446,18 @@ def main():
                 )
             else:
                 print(f"⚠️  Config not found: {cohort_config}. Skipping cohort table.")
+                return 1
         print("✅ Cohort tables generated successfully")
     except subprocess.CalledProcessError as e:
         print(f"⚠️  Cohort table generation failed: {e}")
+        return 1
     except Exception as e:
         print(f"⚠️  Error during cohort table generation: {e}")
+        return 1
     
-    # Step 3: Sync plots to paper
+    # Step 4: Sync plots to paper
     print(f"\n{'='*80}")
-    print("STEP 3: Sync Plots to Paper")
+    print("STEP 4: Sync Plots to Paper")
     print(f"{'='*80}")
     print()
     
@@ -281,27 +467,23 @@ def main():
         
         if sync_script.exists():
             subprocess.run(
-                [sys.executable, str(sync_script), "--task", "income"],
-                cwd=str(project_root),
-                check=True
-            )
-            print()
-            subprocess.run(
-                [sys.executable, str(sync_script), "--task", "employment"],
+                [sys.executable, str(sync_script)],
                 cwd=str(project_root),
                 check=True
             )
             print("✅ Plots synced successfully")
         else:
-            print(f"⚠️  Sync script not found: {sync_script}. Skipping plot sync.")
+            print(f"ℹ️  {sync_script} not present (manuscript sources are not distributed). Skipping plot sync.")
     except subprocess.CalledProcessError as e:
         print(f"⚠️  Plot sync failed: {e}")
+        return 1
     except Exception as e:
         print(f"⚠️  Error during plot sync: {e}")
+        return 1
     
-    # Step 4: Rebuild paper
+    # Step 5: Rebuild paper
     print(f"\n{'='*80}")
-    print("STEP 4: Rebuild LaTeX Paper")
+    print("STEP 5: Rebuild LaTeX Paper")
     print(f"{'='*80}")
     print()
     
@@ -312,7 +494,7 @@ def main():
         
         if rebuild_script.exists():
             result = subprocess.run(
-                ["/bin/bash", str(rebuild_script)],
+                ["/bin/bash", str(rebuild_script), "--skip-sync"],
                 cwd=str(paper_dir),
                 capture_output=True,
                 text=True
@@ -328,10 +510,13 @@ def main():
             else:
                 print(f"⚠️  Paper compilation had issues:")
                 print(result.stdout)
+                print(result.stderr)
+                return 1
         else:
-            print(f"⚠️  Rebuild script not found: {rebuild_script}. Skipping paper rebuild.")
+            print(f"ℹ️  {rebuild_script} not present (manuscript sources are not distributed). Skipping paper rebuild.")
     except Exception as e:
         print(f"⚠️  Error during paper rebuild: {e}")
+        return 1
     
     # Final summary
     print(f"\n{'='*80}")
@@ -339,16 +524,11 @@ def main():
     print(f"{'='*80}")
     total_duration = time.time() - total_start
     print(f"✅ All benchmarks completed successfully")
-    print(f"✅ LaTeX file updated with new run IDs")
-    print(f"✅ Fairness gap tables generated")
-    print(f"✅ Initial performance table generated")
-    print(f"✅ Plots synced to paper")
-    print(f"✅ Paper compiled")
+    print(f"✅ Data audit, fairness gap, initial performance and final delta tables generated")
+    print(f"✅ Tables written to {project_root / 'results' / 'folktables' / 'tables'}")
     print()
     print(f"Total duration: {total_duration/3600:.2f} hours ({total_duration/60:.1f} minutes)")
     print(f"Completed: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print()
-    print(f"Paper location: {project_root / 'paper' / 'articol.pdf'}")
 
 
 if __name__ == "__main__":

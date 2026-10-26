@@ -1,44 +1,47 @@
 # Python
-*.pyc
 __pycache__/
 *.py[cod]
-*$py.class
-
-# Environment
-.env
-.venv
+.venv/
 venv/
-ENV/
+.env
 
-# OS
+# OS / IDE
 .DS_Store
 Thumbs.db
-
-# Data & Results (regenerable)
-data/
-results/
-mlruns/
-paper/*
-!paper/paper.tex
-!paper/paper.pdf
-plots examples/
-# Logs
-*.log
-*.out
-
-# Jupyter
-.ipynb_checkpoints/
-*.ipynb
-
-# IDE
 .vscode/
 .idea/
 *.swp
-*.swo
 
-#Unix
-.iunix_external_client.json
-.iunix_openhands_bridge.json
-.iunix_state.json
-.weaver_coordination.json
-.weaver_journal.json
+# Local tooling
+.claude/
+.iunix/
+.iunix_*.json
+.weaver_*.json
+
+# Folktables / ACS download cache (re-downloaded on first run)
+/data/
+
+# Local-only material (manuscript sources, talks, reading list, scratch)
+/paper/
+/papers/
+/outputs/
+/Plots examples/
+/_local_archive/
+*.log
+
+# Benchmark outputs: only the four runs reported in the paper are versioned
+/results/*
+!/results/folktables/
+/results/folktables/*
+!/results/folktables/tables/
+/results/folktables/tables/*.backup
+!/results/folktables/benchmark_temporal/
+!/results/folktables/benchmark_temporal_race/
+!/results/folktables/benchmark_temporal_employment/
+!/results/folktables/benchmark_temporal_employment_race/
+/results/folktables/*/*/*
+!/results/folktables/benchmark_temporal/folktables_benchmark_temporal/20260507_165711/
+!/results/folktables/benchmark_temporal_race/folktables_benchmark_temporal_race/20260508_111012/
+!/results/folktables/benchmark_temporal_employment/folktables_benchmark_temporal_employment/20260507_232826/
+!/results/folktables/benchmark_temporal_employment_race/folktables_benchmark_temporal_employment_race/20260508_173829/
+/results/folktables/*/*/*/plots/

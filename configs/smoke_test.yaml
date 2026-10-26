@@ -1,0 +1,55 @@
+experiment:
+  name: "smoke_test"
+  type: "benchmark"
+  data_type: "folktables"
+
+data:
+  task: "employment"
+  states: ["CA"]
+  mode: "temporal"
+  frequency: "within_year_fold"
+  train_years: [2014]
+  val_years: [2014]
+  test_years: [2014, 2015]
+  sensitive_attribute: "SEX"
+  max_samples: 20000
+  max_samples_per_year: 5000
+
+methods:
+  - baseline
+  - equalized_odds
+  - demographic_parity
+  - fairness_constraint
+
+maintenance_strategies:
+  - "no-retrain"
+  - "cumulative-retrain"
+  - "last-year-retrain"
+  - "threshold-recalibration"
+  - "cumulative-retrain-fixed-n"
+
+seeds: [0]
+threshold_grid: [0.15, 0.25, 0.35, 0.45, 0.55, 0.65, 0.75]
+
+threshold_selection:
+  max_accuracy_drop: 0.05
+  max_f1_drop: 0.10
+  min_positive_rate: 0.01
+  min_positive_rate_ratio: 0.25
+  fallback_to_baseline: true
+
+postprocessing:
+  backend: "fairlearn_threshold_optimizer"
+  objective: "balanced_accuracy_score"
+  grid_size: 20
+
+fairness_constraint:
+  backend: "fairlearn_reductions"
+  constraint: "demographic_parity"
+  eps: 0.05
+  max_iter: 5
+
+output:
+  dir: "results/folktables/smoke_test"
+  timestamped_runs: true
+  group_by_config: true

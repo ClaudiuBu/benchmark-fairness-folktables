@@ -19,6 +19,50 @@ ATTRIBUTE_NAME_LABELS = {
 
 GAP_METRICS = {"dp_gap", "eo_gap", "oe_gap"}
 
+MAINTENANCE_ORDER = [
+    "no-retrain",
+    "cumulative-retrain",
+    "last-year-retrain",
+    "threshold-recalibration",
+    "cumulative-retrain-fixed-n",
+    "retrain",
+]
+MAINTENANCE_LABELS = {
+    "no-retrain": "No retrain",
+    "cumulative-retrain": "Cumulative",
+    "last-year-retrain": "Last-year",
+    "threshold-recalibration": "Threshold recal.",
+    "cumulative-retrain-fixed-n": "Cumulative fixed-N",
+    "retrain": "Retrain",
+}
+MAINTENANCE_COLORS = {
+    "no-retrain": "#6E6E6E",
+    "cumulative-retrain": "#2C7FB8",
+    "last-year-retrain": "#41AB5D",
+    "threshold-recalibration": "#F28E2B",
+    "cumulative-retrain-fixed-n": "#9467BD",
+    "retrain": "#2C7FB8",
+}
+MAINTENANCE_LINESTYLES = {
+    "no-retrain": "--",
+    "cumulative-retrain": "-",
+    "last-year-retrain": "-.",
+    "threshold-recalibration": ":",
+    "cumulative-retrain-fixed-n": (0, (3, 1, 1, 1)),
+    "retrain": "-",
+}
+
+
+def _ordered_maintenance(values) -> list[str]:
+    present = list(dict.fromkeys([value for value in values if pd.notna(value)]))
+    ordered = [value for value in MAINTENANCE_ORDER if value in present]
+    ordered.extend(sorted(value for value in present if value not in ordered))
+    return ordered
+
+
+def _maintenance_label(value: str) -> str:
+    return MAINTENANCE_LABELS.get(value, value.replace("-", " ").title())
+
 # Mapping for sensitive attribute values to readable labels
 ATTRIBUTE_VALUE_LABELS = {
     "SEX": {0: "Female", 1: "Male"},
@@ -26,11 +70,11 @@ ATTRIBUTE_VALUE_LABELS = {
         0: "Non-White",
         1: "White",
         2: "Black",
-        3: "Native American",
-        4: "Alaska Native",
-        5: "Native Hawaiian",
+        3: "American Indian/Alaska Native",
+        4: "American Indian/Alaska Native",
+        5: "American Indian/Alaska Native",
         6: "Asian",
-        7: "Other Pacific Islander",
+        7: "Native Hawaiian/Pacific Islander",
         8: "Other",
         9: "Two or More Races"
     }
@@ -67,8 +111,19 @@ def _plot_output_path(output_dir: Path, category: str, filename: str) -> Path:
     return output_dir / "plots" / category / filename
 
 
+def _split_baseline_and_temporal_rows(results_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Split plotting rows into explicit baseline rows and temporal rows."""
+    df = results_df.copy()
+    if "phase" not in df.columns:
+        return pd.DataFrame(columns=df.columns), df
+
+    baseline_df = df[df["phase"] == "baseline"].copy()
+    temporal_df = df[df["phase"] != "baseline"].copy()
+    return baseline_df, temporal_df
+
+
 def _apply_period_ticks(ax, values, label="Year"):
-    """Format x-axis ticks for yearly or quarterly periods."""
+    """Format x-axis ticks for yearly periods or stratified within-year folds."""
     if not values:
         ax.set_xlabel(label)
         return
@@ -84,18 +139,18 @@ def _apply_period_ticks(ax, values, label="Year"):
 
     ticks = sorted_values
     labels = []
-    if len(ticks) > 16:
+    if len(ticks) >= 16:
         ticks = ticks[::4]
     elif len(ticks) > 10:
         ticks = ticks[::2]
     for v in ticks:
         year = int(np.floor(v))
-        quarter = int(round((v - year) * 4)) + 1
-        labels.append(f"{year}Q{quarter}")
+        fold = int(round((v - year) * 4)) + 1
+        labels.append(f"{year}-F{fold}")
 
     ax.set_xticks(ticks)
-    ax.set_xticklabels(labels, rotation=0)
-    ax.set_xlabel("Quarter")
+    ax.set_xticklabels(labels, rotation=30, ha="right")
+    ax.set_xlabel("Within-year fold")
     if len(sorted_values) >= 2:
         ax.set_xlim(sorted_values[0], sorted_values[-1])
     ax.margins(x=0)
@@ -105,8 +160,8 @@ def flatten_summary_columns(summary_df: pd.DataFrame) -> pd.DataFrame:
     columns = []
     for col in summary_df.columns:
         if isinstance(col, tuple):
-            if col[0] == "method":
-                columns.append("method")
+            if col[1] in ("", None):
+                columns.append(col[0])
             else:
                 columns.append(f"{col[0]}_{col[1]}")
         else:
@@ -497,25 +552,32 @@ def plot_original_vs_updated(results_by_year_df, output_dir):
     """Plot Original Model (no-retrain) vs Updated Model (retrain) - generates per-attribute plots."""
     _apply_paper_style()
     output_dir.mkdir(parents=True, exist_ok=True)
+
+    baseline_df, temporal_df = _split_baseline_and_temporal_rows(results_by_year_df)
     
-    if "maintenance" not in results_by_year_df.columns:
+    if "maintenance" not in temporal_df.columns:
         return
     
     # Filter to ALL rows only (overall metrics, not subgroup-specific)
-    if "sensitive_attribute_value" in results_by_year_df.columns:
-        results_by_year_df = results_by_year_df[results_by_year_df["sensitive_attribute_value"] == "ALL"]
+    if "sensitive_attribute_value" in temporal_df.columns:
+        temporal_df = temporal_df[temporal_df["sensitive_attribute_value"] == "ALL"]
+    if "sensitive_attribute_value" in baseline_df.columns:
+        baseline_df = baseline_df[baseline_df["sensitive_attribute_value"] == "ALL"]
     
-    maintenance_opts = results_by_year_df["maintenance"].unique()
+    if temporal_df.empty:
+        return
+
+    maintenance_opts = _ordered_maintenance(temporal_df["maintenance"].unique())
     if len(maintenance_opts) < 2:
         return
     
-    metrics = _available_results_metrics(results_by_year_df)
+    metrics = _available_results_metrics(temporal_df)
     if not metrics:
         return
 
     has_multiple_attributes = (
-        "sensitive_attribute" in results_by_year_df.columns
-        and results_by_year_df["sensitive_attribute"].nunique() > 1
+        "sensitive_attribute" in temporal_df.columns
+        and temporal_df["sensitive_attribute"].nunique() > 1
     )
     preferred_general_metrics = ["accuracy", "f1_score", "auc"]
     general_metrics = [metric for metric in preferred_general_metrics if metric in metrics]
@@ -530,7 +592,6 @@ def plot_original_vs_updated(results_by_year_df, output_dir):
         fig, axes = plt.subplots(n_rows, n_cols, figsize=(5.2 * n_cols, 4.1 * n_rows), dpi=200)
         axes = np.atleast_1d(axes).flatten()
 
-        colors = {"no-retrain": "#6E6E6E", "retrain": "#2C7FB8"}
         years_sorted = sorted(plot_data["year"].unique())
 
         for idx, metric in enumerate(metrics_to_plot):
@@ -539,7 +600,7 @@ def plot_original_vs_updated(results_by_year_df, output_dir):
             grouped = plot_data.groupby(["year", "maintenance"])[metric].agg(["mean", "std", "count"])
             grouped["ci"] = 1.96 * grouped["std"] / np.sqrt(grouped["count"])
 
-            for maintenance in sorted(maintenance_opts):
+            for maintenance in maintenance_opts:
                 data_m = grouped.loc[grouped.index.get_level_values("maintenance") == maintenance]
                 if data_m.empty:
                     continue
@@ -548,18 +609,18 @@ def plot_original_vs_updated(results_by_year_df, output_dir):
                 means = data_m["mean"].values
                 cis = np.nan_to_num(data_m["ci"].values, nan=0.0)
 
-                line_style = "-" if maintenance == "retrain" else "--"
-                label = "Updated" if maintenance == "retrain" else "Original"
+                line_style = MAINTENANCE_LINESTYLES.get(maintenance, "-")
+                color = MAINTENANCE_COLORS.get(maintenance, "#888888")
+                label = _maintenance_label(maintenance)
 
-                ax.plot(years, means, linewidth=2.3, linestyle=line_style, color=colors[maintenance], label=label)
-                ax.fill_between(years, means - cis, means + cis, color=colors[maintenance], alpha=0.10)
+                ax.plot(years, means, linewidth=2.3, linestyle=line_style, color=color, label=label)
+                ax.fill_between(years, means - cis, means + cis, color=color, alpha=0.10)
 
-            if years_sorted:
-                first_period = years_sorted[0]
-                baseline_rows = plot_data[
-                    (plot_data["maintenance"] == "no-retrain")
-                    & (plot_data["year"] == first_period)
-                ]
+            if not baseline_df.empty:
+                baseline_rows = baseline_df[baseline_df["maintenance"] == "no-retrain"]
+                if "sensitive_attribute" in plot_data.columns and plot_data["sensitive_attribute"].nunique() == 1:
+                    attr_name = plot_data["sensitive_attribute"].iloc[0]
+                    baseline_rows = baseline_rows[baseline_rows["sensitive_attribute"] == attr_name]
                 if not baseline_rows.empty:
                     baseline_value = baseline_rows[metric].mean()
                     ax.axhline(
@@ -567,7 +628,7 @@ def plot_original_vs_updated(results_by_year_df, output_dir):
                         color="#333333",
                         linestyle=":",
                         linewidth=1.2,
-                        label="Initial",
+                        label="2014 baseline",
                     )
 
             _apply_period_ticks(ax, years_sorted, label="Year")
@@ -575,7 +636,7 @@ def plot_original_vs_updated(results_by_year_df, output_dir):
             ax.grid(True)
             ax.tick_params(axis="both", labelsize=8)
             handles, labels = ax.get_legend_handles_labels()
-            preferred_order = ["Initial", "Original", "Updated"]
+            preferred_order = ["2014 baseline"] + [_maintenance_label(value) for value in maintenance_opts]
             ordered = [
                 (handles[labels.index(label)], label)
                 for label in preferred_order
@@ -600,7 +661,7 @@ def plot_original_vs_updated(results_by_year_df, output_dir):
 
     # General view (legacy behavior): aggregate across all available sensitive attributes
     general_fig = _build_original_vs_updated_figure(
-        results_by_year_df,
+        temporal_df,
         " - General",
         general_metrics,
     )
@@ -613,7 +674,7 @@ def plot_original_vs_updated(results_by_year_df, output_dir):
     # Also export one panel per metric for paper layouts (metric rows, task columns).
     for metric in general_metrics:
         metric_fig = _build_original_vs_updated_figure(
-            results_by_year_df,
+            temporal_df,
             "",
             [metric],
         )
@@ -626,15 +687,15 @@ def plot_original_vs_updated(results_by_year_df, output_dir):
         plt.close(metric_fig)
 
     # Generate separate plots for each sensitive attribute (cannot average gap metrics across attributes)
-    attributes = sorted(results_by_year_df["sensitive_attribute"].unique()) if "sensitive_attribute" in results_by_year_df.columns else [None]
+    attributes = sorted(temporal_df["sensitive_attribute"].unique()) if "sensitive_attribute" in temporal_df.columns else [None]
     
     for attr_name in attributes:
         if attr_name is not None:
-            attr_data = results_by_year_df[results_by_year_df["sensitive_attribute"] == attr_name]
+            attr_data = temporal_df[temporal_df["sensitive_attribute"] == attr_name]
             attr_suffix = f"_{attr_name.lower()}"
             attr_title_suffix = f" - {attr_name}"
         else:
-            attr_data = results_by_year_df
+            attr_data = temporal_df
             attr_suffix = ""
             attr_title_suffix = ""
         
@@ -658,21 +719,23 @@ def plot_original_vs_updated_by_attribute(results_by_year_df, output_dir):
     """
     _apply_paper_style()
     output_dir.mkdir(parents=True, exist_ok=True)
+
+    baseline_df, temporal_df = _split_baseline_and_temporal_rows(results_by_year_df)
     
-    if "sensitive_attribute" not in results_by_year_df.columns:
+    if "sensitive_attribute" not in temporal_df.columns:
         return
     
-    if "sensitive_attribute_value" not in results_by_year_df.columns:
+    if "sensitive_attribute_value" not in temporal_df.columns:
         return
     
-    if "maintenance" not in results_by_year_df.columns:
+    if "maintenance" not in temporal_df.columns:
         return
     
-    maintenance_opts = results_by_year_df["maintenance"].unique()
+    maintenance_opts = _ordered_maintenance(temporal_df["maintenance"].unique())
     if len(maintenance_opts) < 2:
         return
     
-    metrics = _available_results_metrics(results_by_year_df)
+    metrics = _available_results_metrics(temporal_df)
     if not metrics:
         return
 
@@ -682,7 +745,7 @@ def plot_original_vs_updated_by_attribute(results_by_year_df, output_dir):
         return
     
     # Get unique attributes (not attribute-value pairs)
-    unique_attributes = sorted(results_by_year_df["sensitive_attribute"].unique())
+    unique_attributes = sorted(temporal_df["sensitive_attribute"].unique())
     if not unique_attributes:
         return
     
@@ -692,8 +755,7 @@ def plot_original_vs_updated_by_attribute(results_by_year_df, output_dir):
     
     # Color palette for different attribute values (max 10 colors)
     value_colors = plt.cm.tab10.colors
-    maintenance_colors = {"no-retrain": "#6E6E6E", "retrain": "#2C7FB8"}
-    years_sorted = sorted(results_by_year_df["year"].unique())
+    years_sorted = sorted(temporal_df["year"].unique())
     
     for metric in metrics:
         fig, axes = plt.subplots(n_rows, n_cols, figsize=(7 * n_cols, 4.5 * n_rows), dpi=200)
@@ -705,7 +767,7 @@ def plot_original_vs_updated_by_attribute(results_by_year_df, output_dir):
             metric_is_gap = metric in GAP_METRICS
             
             # Get all values for this attribute
-            attr_data = results_by_year_df[results_by_year_df["sensitive_attribute"] == attr_name]
+            attr_data = temporal_df[temporal_df["sensitive_attribute"] == attr_name]
             if attr_data.empty:
                 continue
 
@@ -716,7 +778,7 @@ def plot_original_vs_updated_by_attribute(results_by_year_df, output_dir):
                     grouped = overall_data.groupby(["year", "maintenance"])[metric].agg(["mean", "std", "count"])
                     grouped["ci"] = 1.96 * grouped["std"] / np.sqrt(grouped["count"])
 
-                    for maintenance in sorted(maintenance_opts):
+                    for maintenance in maintenance_opts:
                         data_m = grouped.loc[grouped.index.get_level_values("maintenance") == maintenance]
                         if data_m.empty:
                             continue
@@ -733,9 +795,9 @@ def plot_original_vs_updated_by_attribute(results_by_year_df, output_dir):
                         means = means[valid_mask]
                         cis = np.nan_to_num(cis[valid_mask], nan=0.0)
 
-                        line_style = "-" if maintenance == "retrain" else "--"
-                        label = "Updated model" if maintenance == "retrain" else "Original model"
-                        color = maintenance_colors.get(maintenance, "#2C7FB8")
+                        line_style = MAINTENANCE_LINESTYLES.get(maintenance, "-")
+                        label = _maintenance_label(maintenance)
+                        color = MAINTENANCE_COLORS.get(maintenance, "#888888")
 
                         ax.plot(years, means, linewidth=2.3, linestyle=line_style, color=color, label=label)
                         ax.fill_between(years, means - cis, means + cis, color=color, alpha=0.10)
@@ -759,7 +821,7 @@ def plot_original_vs_updated_by_attribute(results_by_year_df, output_dir):
                     grouped = value_data.groupby(["year", "maintenance"])[metric].agg(["mean", "std", "count"])
                     grouped["ci"] = 1.96 * grouped["std"] / np.sqrt(grouped["count"])
 
-                    for maintenance in sorted(maintenance_opts):
+                    for maintenance in maintenance_opts:
                         data_m = grouped.loc[grouped.index.get_level_values("maintenance") == maintenance]
                         if data_m.empty:
                             continue
@@ -776,8 +838,8 @@ def plot_original_vs_updated_by_attribute(results_by_year_df, output_dir):
                         means = means[valid_mask]
                         cis = np.nan_to_num(cis[valid_mask], nan=0.0)
 
-                        line_style = "-" if maintenance == "retrain" else "--"
-                        maintenance_label = "Updated" if maintenance == "retrain" else "Original"
+                        line_style = MAINTENANCE_LINESTYLES.get(maintenance, "-")
+                        maintenance_label = _maintenance_label(maintenance)
                         label = f"{value_label} - {maintenance_label}"
 
                         ax.plot(years, means, linewidth=2.3, linestyle=line_style, color=base_color, label=label)
@@ -785,12 +847,13 @@ def plot_original_vs_updated_by_attribute(results_by_year_df, output_dir):
                         plotted_any = True
             
             # Baseline initial performance from first period (averaged across all values)
-            if years_sorted:
-                first_period = years_sorted[0]
-                baseline_rows = attr_data[
-                    (attr_data["maintenance"] == "no-retrain")
-                    & (attr_data["year"] == first_period)
+            if not baseline_df.empty:
+                baseline_rows = baseline_df[
+                    (baseline_df["maintenance"] == "no-retrain")
+                    & (baseline_df["sensitive_attribute"] == attr_name)
                 ]
+                if "sensitive_attribute_value" in baseline_rows.columns:
+                    baseline_rows = baseline_rows[baseline_rows["sensitive_attribute_value"].astype(str) == "ALL"]
                 if not baseline_rows.empty:
                     baseline_value = baseline_rows[metric].mean()
                     if not np.isnan(baseline_value):
@@ -799,7 +862,7 @@ def plot_original_vs_updated_by_attribute(results_by_year_df, output_dir):
                             color="#333333",
                             linestyle=":",
                             linewidth=1.2,
-                            label="Initial performance",
+                            label="2014 baseline",
                         )
                         plotted_any = True
             
@@ -818,7 +881,7 @@ def plot_original_vs_updated_by_attribute(results_by_year_df, output_dir):
             
             if plotted_any:
                 # Organize legend in 3 columns:
-                # Row 1: Value1-Original | Initial performance | Value2-Original
+                # Row 1: Value1-Original | 2014 baseline | Value2-Original
                 # Row 2: Value1-Updated  | (empty)             | Value2-Updated
                 handles, labels = ax.get_legend_handles_labels()
 
@@ -845,7 +908,7 @@ def plot_original_vs_updated_by_attribute(results_by_year_df, output_dir):
                 # Extract unique attribute values from labels
                 value_labels = []
                 for lbl in seen_order:
-                    if " - " in lbl and lbl != "Initial performance":
+                    if " - " in lbl and lbl != "2014 baseline":
                         val_lbl = lbl.split(" - ")[0]
                         if val_lbl not in value_labels:
                             value_labels.append(val_lbl)
@@ -863,9 +926,9 @@ def plot_original_vs_updated_by_attribute(results_by_year_df, output_dir):
                     if val1_orig in label_to_handle:
                         ordered_handles.append(label_to_handle[val1_orig])
                         ordered_labels.append(val1_orig)
-                    if "Initial performance" in label_to_handle:
-                        ordered_handles.append(label_to_handle["Initial performance"])
-                        ordered_labels.append("Initial performance")
+                    if "2014 baseline" in label_to_handle:
+                        ordered_handles.append(label_to_handle["2014 baseline"])
+                        ordered_labels.append("2014 baseline")
                     if val2_orig in label_to_handle:
                         ordered_handles.append(label_to_handle[val2_orig])
                         ordered_labels.append(val2_orig)
@@ -921,3 +984,133 @@ def plot_original_vs_updated_by_attribute(results_by_year_df, output_dir):
         plt.close(fig)
     
     print(f"✓ Saved original vs updated by attribute plots")
+
+
+def plot_fairness_by_method(results_by_year_df: pd.DataFrame, output_dir: Path):
+    """Plot fairness gaps by method across temporal periods and maintenance strategies."""
+    _apply_paper_style()
+
+    required = {"sensitive_attribute", "method", "maintenance", "year", "dp_gap", "eo_gap"}
+    if not required.issubset(results_by_year_df.columns):
+        missing = required - set(results_by_year_df.columns)
+        print(f"⚠️  plot_fairness_by_method: missing columns {missing}, skipping.")
+        return
+
+    baseline_df, temporal_df = _split_baseline_and_temporal_rows(results_by_year_df)
+    df = temporal_df.copy()
+    if "sensitive_attribute_value" in df.columns:
+        df = df[df["sensitive_attribute_value"].astype(str).isin(["ALL", "nan"])]
+    if "sensitive_attribute_value" in baseline_df.columns:
+        baseline_df = baseline_df[baseline_df["sensitive_attribute_value"].astype(str).isin(["ALL", "nan"])]
+
+    if df.empty:
+        print("⚠️  plot_fairness_by_method: no overall rows found, skipping.")
+        return
+
+    maintenance_opts = _ordered_maintenance(df["maintenance"].dropna().unique())
+    gap_metrics = ["dp_gap", "eo_gap"]
+    gap_labels = {"dp_gap": "DP Gap", "eo_gap": "EO Gap"}
+
+    method_colors = {
+        "baseline": "#1f77b4",
+        "reweighing": "#ff7f0e",
+        "demographic_parity": "#9467bd",
+        "equalized_odds": "#2ca02c",
+        "fairness_constraint": "#d62728",
+    }
+    method_display = {
+        "baseline": "Baseline",
+        "reweighing": "Reweighing",
+        "demographic_parity": "Dem. Parity",
+        "equalized_odds": "Eq. Odds",
+        "fairness_constraint": "Fair. Constraint",
+    }
+
+    unique_attributes = sorted(df["sensitive_attribute"].dropna().unique())
+    if not unique_attributes:
+        print("⚠️  plot_fairness_by_method: no sensitive attributes found, skipping.")
+        return
+
+    years_sorted = sorted(df["year"].dropna().unique())
+
+    for attr in unique_attributes:
+        attr_df = df[df["sensitive_attribute"] == attr]
+        methods = sorted(attr_df["method"].dropna().unique())
+
+        n_cols = max(1, len(maintenance_opts))
+        fig, axes = plt.subplots(2, n_cols, figsize=(4.2 * n_cols, 7), dpi=200, sharex=True)
+        axes = np.atleast_2d(axes)
+        fig.suptitle(f"Fairness Drift by Method — {attr.upper()}", fontsize=12, fontweight="bold", y=1.01)
+
+        for row_idx, metric in enumerate(gap_metrics):
+            for col_idx, maint in enumerate(maintenance_opts):
+                ax = axes[row_idx][col_idx]
+                maint_df = attr_df[attr_df["maintenance"] == maint]
+                maint_label = _maintenance_label(maint)
+
+                for method in methods:
+                    mdf = maint_df[maint_df["method"] == method].sort_values("year")
+                    if mdf.empty:
+                        continue
+                    grouped = mdf.groupby("year")[metric].agg(["mean", "std", "count"]).reset_index()
+                    grouped["ci"] = 1.96 * grouped["std"] / np.sqrt(grouped["count"].clip(lower=1))
+
+                    means = grouped["mean"].values
+                    cis = np.nan_to_num(grouped["ci"].values, nan=0.0)
+                    yrs = grouped["year"].values
+
+                    color = method_colors.get(method, "#888888")
+                    label = method_display.get(method, method)
+                    ax.plot(yrs, means, linewidth=2.0, color=color, label=label)
+                    ax.fill_between(yrs, means - cis, means + cis, color=color, alpha=0.12)
+
+                baseline_rows = baseline_df[
+                    (baseline_df["maintenance"] == "no-retrain")
+                    & (baseline_df["sensitive_attribute"] == attr)
+                ]
+                if not baseline_rows.empty:
+                    baseline_value = baseline_rows[metric].mean()
+                    if not np.isnan(baseline_value):
+                        ax.axhline(
+                            baseline_value,
+                            color="#555555",
+                            linestyle=":",
+                            linewidth=1.3,
+                            label="2014 baseline",
+                        )
+
+                _apply_period_ticks(ax, years_sorted, label="Year")
+                ax.set_ylabel(gap_labels[metric], fontsize=9)
+                ax.set_title(maint_label, fontsize=10)
+                ax.grid(True)
+                ax.tick_params(axis="both", labelsize=8)
+
+                if row_idx == 0 and col_idx == len(maintenance_opts) - 1:
+                    handles, labels = ax.get_legend_handles_labels()
+                    label_to_handle = {}
+                    for handle, label in zip(handles, labels):
+                        if label not in label_to_handle:
+                            label_to_handle[label] = handle
+                    ordered_labels = [
+                        label for label in
+                        ["2014 baseline", "Baseline", "Reweighing", "Dem. Parity", "Eq. Odds", "Fair. Constraint"]
+                        if label in label_to_handle
+                    ]
+                    ordered_handles = [label_to_handle[label] for label in ordered_labels]
+                    ax.legend(
+                        ordered_handles,
+                        ordered_labels,
+                        fontsize=8,
+                        ncol=1,
+                        loc="upper left",
+                        bbox_to_anchor=(1.02, 1.0),
+                        borderaxespad=0,
+                    )
+
+        fig.tight_layout()
+        plot_path = _plot_output_path(output_dir, "fairness_by_method", f"fairness_by_method_{attr.lower()}.png")
+        _save_figure(fig, plot_path)
+        plt.close(fig)
+        print(f"✓ Saved fairness_by_method plot: {plot_path.name}")
+
+    print(f"✓ Saved all fairness_by_method plots ({len(unique_attributes)} attributes)")

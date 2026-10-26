@@ -12,12 +12,7 @@ selection:
   income_label: "Income"
   employment_label: "Employment"
   metrics:
-    - "auc"
-    - "brier_score"
     - "oe_gap"
-    - "accuracy"
-    - "sensitivity"
-    - "f1_score"
     - "dp_gap"
     - "eo_gap"
   drop_fully_missing_metrics: true

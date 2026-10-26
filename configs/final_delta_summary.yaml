@@ -1,0 +1,38 @@
+inputs:
+  income:
+    label: "Income"
+    base_dir: "results/folktables/benchmark_temporal/folktables_benchmark_temporal"
+    attribute_dirs:
+      RAC1P: "results/folktables/benchmark_temporal_race/folktables_benchmark_temporal_race"
+  employment:
+    label: "Employment"
+    base_dir: "results/folktables/benchmark_temporal_employment/folktables_benchmark_temporal_employment"
+    attribute_dirs:
+      RAC1P: "results/folktables/benchmark_temporal_employment_race/folktables_benchmark_temporal_employment_race"
+
+selection:
+  methods:
+    - "baseline"
+    - "reweighing"
+    - "demographic_parity"
+    - "equalized_odds"
+    - "fairness_constraint"
+  maintenance:
+    - "no-retrain"
+    - "cumulative-retrain"
+    - "last-year-retrain"
+    - "threshold-recalibration"
+    - "cumulative-retrain-fixed-n"
+  attributes:
+    - "RAC1P"
+    - "SEX"
+  gap_metrics:
+    - "dp_gap"
+    - "eo_gap"
+  utility_metrics:
+    - "accuracy"
+    - "f1_score"
+    - "positive_rate"
+
+output:
+  path: "results/folktables/tables/final_delta_summary.tex"

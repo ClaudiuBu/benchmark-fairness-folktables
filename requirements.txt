@@ -1,9 +1,10 @@
-folktables
-matplotlib
-numpy
-pandas
-pyyaml
-scikit-learn
-scipy
-seaborn
-tqdm
+# Versions used to produce the results reported in the paper (Python 3.13)
+fairlearn==0.13.0
+folktables==0.0.12
+matplotlib==3.10.8
+numpy==2.4.1
+pandas==2.3.3
+pyyaml==6.0.3
+scikit-learn==1.8.0
+scipy==1.15.3
+seaborn==0.13.2

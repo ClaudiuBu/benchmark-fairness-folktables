@@ -1,0 +1,9 @@
+tasks:
+  - task: income
+    states: ["CA"]
+    years: [2014, 2015, 2016, 2017, 2018]
+  - task: employment
+    states: ["CA"]
+    years: [2014, 2015, 2016, 2017, 2018]
+
+output_dir: results/folktables/tables
