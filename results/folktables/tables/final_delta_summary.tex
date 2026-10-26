@@ -1,0 +1,38 @@
+\begin{table}[H]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{1.05}
+\caption{Compact final temporal delta summary. Initial values refer to the 2014 hold-out baseline; final values refer to the final evaluation year after aggregating simulated within-year folds into calendar-year estimates. The table shows the frozen baseline, the lowest final gap, and the largest reduction for each task--attribute--gap combination. The exhaustive task $\times$ attribute $\times$ method $\times$ maintenance table is exported with the generated results.}
+\label{tab:final_delta_summary}
+\begin{tabular}{lll l p{0.25\textwidth} rrr l}
+\toprule
+Task & Attr. & Gap & Row & Pipeline / maintenance & Initial & Final & $\Delta$ & Acc/F1/PPR \\
+\midrule
+Employment & Race & DP Gap & Frozen baseline & Baseline / No-retrain & 0.012 & 0.013 & +0.001 & 0.763/0.754/0.517 \\
+Employment & Race & DP Gap & Lowest final gap & Dem. Parity / Threshold recal. & 0.005 & 0.004 & -0.001 & 0.761/0.761/0.555 \\
+Employment & Race & DP Gap & Largest reduction & Reweighing / Threshold recal. & 0.013 & 0.007 & -0.006 & 0.747/0.763/0.627 \\
+Employment & Race & EO Gap & Frozen baseline & Baseline / No-retrain & 0.027 & 0.023 & -0.005 & 0.763/0.754/0.517 \\
+Employment & Race & EO Gap & Lowest final gap & Eq. Odds / Threshold recal. & 0.009 & 0.007 & -0.002 & 0.760/0.756/0.538 \\
+Employment & Race & EO Gap & Largest reduction & Reweighing / Threshold recal. & 0.029 & 0.017 & -0.012 & 0.747/0.763/0.627 \\
+Employment & Sex & DP Gap & Frozen baseline & Baseline / No-retrain & 0.051 & 0.053 & +0.003 & 0.765/0.756/0.517 \\
+Employment & Sex & DP Gap & Lowest final gap & Dem. Parity / Threshold recal. & 0.004 & 0.005 & +0.001 & 0.765/0.764/0.554 \\
+Employment & Sex & DP Gap & Largest reduction & Eq. Odds / Last-year & 0.037 & 0.036 & -0.001 & 0.751/0.750/0.555 \\
+Employment & Sex & EO Gap & Frozen baseline & Baseline / No-retrain & 0.115 & 0.117 & +0.001 & 0.765/0.756/0.517 \\
+Employment & Sex & EO Gap & Lowest final gap & Eq. Odds / Last-year & 0.008 & 0.010 & +0.003 & 0.751/0.750/0.555 \\
+Employment & Sex & EO Gap & Largest reduction & Dem. Parity / Cumulative & 0.073 & 0.060 & -0.013 & 0.764/0.766/0.563 \\
+Income & Race & DP Gap & Frozen baseline & Baseline / No-retrain & 0.090 & 0.098 & +0.007 & 0.779/0.700/0.336 \\
+Income & Race & DP Gap & Lowest final gap & Dem. Parity / No-retrain & 0.006 & 0.006 & -0.000 & 0.775/0.734/0.446 \\
+Income & Race & DP Gap & Largest reduction & Eq. Odds / Threshold recal. & 0.049 & 0.044 & -0.005 & 0.773/0.736/0.456 \\
+Income & Race & EO Gap & Frozen baseline & Baseline / No-retrain & 0.062 & 0.083 & +0.020 & 0.779/0.700/0.336 \\
+Income & Race & EO Gap & Lowest final gap & Eq. Odds / Threshold recal. & 0.011 & 0.010 & -0.001 & 0.773/0.736/0.456 \\
+Income & Race & EO Gap & Largest reduction & Fair. Constraint / Threshold recal. & 0.051 & 0.021 & -0.030 & 0.771/0.696/0.350 \\
+Income & Sex & DP Gap & Frozen baseline & Baseline / No-retrain & 0.040 & 0.034 & -0.005 & 0.779/0.699/0.334 \\
+Income & Sex & DP Gap & Lowest final gap & Dem. Parity / Threshold recal. & 0.006 & 0.003 & -0.003 & 0.776/0.740/0.457 \\
+Income & Sex & DP Gap & Largest reduction & Baseline / Threshold recal. & 0.040 & 0.008 & -0.032 & 0.774/0.742/0.472 \\
+Income & Sex & EO Gap & Frozen baseline & Baseline / No-retrain & 0.022 & 0.027 & +0.005 & 0.779/0.699/0.334 \\
+Income & Sex & EO Gap & Lowest final gap & Eq. Odds / Threshold recal. & 0.012 & 0.008 & -0.003 & 0.780/0.744/0.456 \\
+Income & Sex & EO Gap & Largest reduction & Eq. Odds / Threshold recal. & 0.012 & 0.008 & -0.003 & 0.780/0.744/0.456 \\
+\bottomrule
+\end{tabular}
+\end{table}

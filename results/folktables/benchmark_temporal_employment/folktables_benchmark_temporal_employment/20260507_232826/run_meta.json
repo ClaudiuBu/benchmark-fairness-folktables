@@ -1,0 +1,59 @@
+{
+  "run_id": "20260507_232826",
+  "config_path": "configs/folktables_benchmark_temporal_employment.yaml",
+  "base_output_dir": "results/folktables/benchmark_temporal_employment/folktables_benchmark_temporal_employment",
+  "output_dir": "results/folktables/benchmark_temporal_employment/folktables_benchmark_temporal_employment/20260507_232826",
+  "experiment": "folktables_benchmark_temporal_employment",
+  "methods": [
+    "baseline",
+    "reweighing",
+    "equalized_odds",
+    "demographic_parity",
+    "fairness_constraint"
+  ],
+  "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19
+  ],
+  "results": "results/folktables/benchmark_temporal_employment/folktables_benchmark_temporal_employment/20260507_232826/benchmark_results.csv",
+  "summary": "results/folktables/benchmark_temporal_employment/folktables_benchmark_temporal_employment/20260507_232826/benchmark_summary.csv",
+  "elapsed_seconds": 31083.47,
+  "model_feature_columns": [
+    "AGEP",
+    "SCHL",
+    "MAR",
+    "RELP",
+    "DIS",
+    "ESP",
+    "CIT",
+    "MIG",
+    "MIL",
+    "ANC",
+    "NATIVITY",
+    "DEAR",
+    "DEYE",
+    "DREM"
+  ],
+  "excluded_feature_columns": [
+    "SEX",
+    "RAC1P"
+  ]
+}

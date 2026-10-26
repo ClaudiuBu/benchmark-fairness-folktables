@@ -1,0 +1,22 @@
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{1.08}
+\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}}lcc}
+\toprule
+Metric & Income ($>$\$50K) & Employment \\
+\midrule
+AUC & 0.862 [0.861--0.862] & 0.830 [0.830--0.831] \\
+Brier Score & 0.144 [0.143--0.144] & 0.161 [0.161--0.161] \\
+Accuracy & 0.794 [0.793--0.795] & 0.757 [0.756--0.758] \\
+Sensitivity & 0.667 [0.656--0.679] & 0.816 [0.808--0.824] \\
+F1 Score & 0.697 [0.692--0.701] & 0.743 [0.741--0.745] \\
+O/E Gap (Sex) & 0.252 [0.245--0.258] & 0.237 [0.234--0.240] \\
+\midrule
+\multicolumn{3}{l}{\textit{Fairness Metrics (Sex):}} \\
+DP Gap & 0.040 [0.036--0.043] & 0.051 [0.048--0.054] \\
+EO Gap & 0.022 [0.018--0.026] & 0.115 [0.111--0.120] \\
+\midrule
+\multicolumn{3}{l}{\textit{Fairness Metrics (Race):}} \\
+DP Gap & 0.090 [0.086--0.095] & 0.012 [0.008--0.016] \\
+EO Gap & 0.062 [0.055--0.070] & 0.027 [0.023--0.032] \\
+\bottomrule
+\end{tabular*}

@@ -1,0 +1,218 @@
+\begingroup
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{1.05}
+\begin{longtable}{llcllrrrrrrrr}
+\caption{Exhaustive final temporal delta summary. Initial values refer to the 2014 hold-out baseline, while final values refer to the final temporal evaluation year after aggregating simulated within-year folds into yearly estimates. PPR denotes positive prediction rate.}
+\label{tab:final_delta_summary_full}\\
+\toprule
+Task & Attr. & Method & Maint. & Gap & Initial & Final & $\Delta$ & Rel. $\Delta$ & Slope & Final Acc. & Final F1 & Final PPR \\
+\midrule
+\endfirsthead
+\toprule
+Task & Attr. & Method & Maint. & Gap & Initial & Final & $\Delta$ & Rel. $\Delta$ & Slope & Final Acc. & Final F1 & Final PPR \\
+\midrule
+\endhead
+Income & Race & Baseline & No-retrain & DP Gap & 0.090 & 0.098 & +0.007 & +8.1\% & -0.001 & 0.779 & 0.700 & 0.336 \\
+Income & Race & Baseline & No-retrain & EO Gap & 0.062 & 0.083 & +0.020 & +32.7\% & +0.002 & 0.779 & 0.700 & 0.336 \\
+Income & Race & Baseline & Cumulative & DP Gap & 0.090 & 0.097 & +0.007 & +7.2\% & -0.002 & 0.782 & 0.713 & 0.356 \\
+Income & Race & Baseline & Cumulative & EO Gap & 0.062 & 0.077 & +0.014 & +22.5\% & +0.000 & 0.782 & 0.713 & 0.356 \\
+Income & Race & Baseline & Last-year & DP Gap & 0.090 & 0.093 & +0.003 & +3.3\% & -0.003 & 0.784 & 0.724 & 0.379 \\
+Income & Race & Baseline & Last-year & EO Gap & 0.062 & 0.066 & +0.004 & +5.6\% & -0.004 & 0.784 & 0.724 & 0.379 \\
+Income & Race & Baseline & Threshold recal. & DP Gap & 0.090 & 0.097 & +0.007 & +7.8\% & -0.002 & 0.774 & 0.742 & 0.473 \\
+Income & Race & Baseline & Threshold recal. & EO Gap & 0.062 & 0.055 & -0.008 & -12.1\% & -0.001 & 0.774 & 0.742 & 0.473 \\
+Income & Race & Baseline & Cumulative fixed-N & DP Gap & 0.090 & 0.100 & +0.009 & +10.2\% & -0.000 & 0.781 & 0.711 & 0.355 \\
+Income & Race & Baseline & Cumulative fixed-N & EO Gap & 0.062 & 0.081 & +0.019 & +29.7\% & +0.002 & 0.781 & 0.711 & 0.355 \\
+Income & Race & Reweighing & No-retrain & DP Gap & 0.078 & 0.086 & +0.008 & +10.2\% & -0.001 & 0.778 & 0.699 & 0.334 \\
+Income & Race & Reweighing & No-retrain & EO Gap & 0.043 & 0.065 & +0.022 & +50.1\% & +0.003 & 0.778 & 0.699 & 0.334 \\
+Income & Race & Reweighing & Cumulative & DP Gap & 0.078 & 0.086 & +0.008 & +10.8\% & -0.001 & 0.782 & 0.713 & 0.356 \\
+Income & Race & Reweighing & Cumulative & EO Gap & 0.043 & 0.060 & +0.017 & +39.0\% & +0.001 & 0.782 & 0.713 & 0.356 \\
+Income & Race & Reweighing & Last-year & DP Gap & 0.078 & 0.084 & +0.006 & +8.2\% & -0.002 & 0.784 & 0.723 & 0.377 \\
+Income & Race & Reweighing & Last-year & EO Gap & 0.043 & 0.053 & +0.010 & +22.9\% & -0.002 & 0.784 & 0.723 & 0.377 \\
+Income & Race & Reweighing & Threshold recal. & DP Gap & 0.078 & 0.087 & +0.009 & +12.2\% & -0.002 & 0.774 & 0.741 & 0.471 \\
+Income & Race & Reweighing & Threshold recal. & EO Gap & 0.043 & 0.044 & +0.001 & +2.1\% & -0.001 & 0.774 & 0.741 & 0.471 \\
+Income & Race & Reweighing & Cumulative fixed-N & DP Gap & 0.078 & 0.089 & +0.011 & +14.2\% & +0.000 & 0.781 & 0.711 & 0.354 \\
+Income & Race & Reweighing & Cumulative fixed-N & EO Gap & 0.043 & 0.065 & +0.021 & +49.6\% & +0.003 & 0.781 & 0.711 & 0.354 \\
+Income & Race & Dem. Parity & No-retrain & DP Gap & 0.006 & 0.006 & -0.000 & -0.6\% & -0.001 & 0.775 & 0.734 & 0.446 \\
+Income & Race & Dem. Parity & No-retrain & EO Gap & 0.055 & 0.051 & -0.005 & -8.8\% & +0.001 & 0.775 & 0.734 & 0.446 \\
+Income & Race & Dem. Parity & Cumulative & DP Gap & 0.006 & 0.006 & -0.000 & -3.6\% & -0.001 & 0.775 & 0.737 & 0.450 \\
+Income & Race & Dem. Parity & Cumulative & EO Gap & 0.055 & 0.051 & -0.004 & -7.7\% & +0.001 & 0.775 & 0.737 & 0.450 \\
+Income & Race & Dem. Parity & Last-year & DP Gap & 0.006 & 0.008 & +0.002 & +30.0\% & -0.000 & 0.774 & 0.737 & 0.454 \\
+Income & Race & Dem. Parity & Last-year & EO Gap & 0.055 & 0.059 & +0.004 & +6.9\% & +0.004 & 0.774 & 0.737 & 0.454 \\
+Income & Race & Dem. Parity & Threshold recal. & DP Gap & 0.006 & 0.008 & +0.002 & +26.7\% & -0.000 & 0.773 & 0.736 & 0.456 \\
+Income & Race & Dem. Parity & Threshold recal. & EO Gap & 0.055 & 0.060 & +0.005 & +8.3\% & +0.005 & 0.773 & 0.736 & 0.456 \\
+Income & Race & Dem. Parity & Cumulative fixed-N & DP Gap & 0.006 & 0.006 & -0.000 & -4.6\% & -0.001 & 0.775 & 0.736 & 0.450 \\
+Income & Race & Dem. Parity & Cumulative fixed-N & EO Gap & 0.055 & 0.052 & -0.003 & -6.2\% & +0.001 & 0.775 & 0.736 & 0.450 \\
+Income & Race & Eq. Odds & No-retrain & DP Gap & 0.049 & 0.052 & +0.003 & +5.4\% & -0.002 & 0.775 & 0.736 & 0.446 \\
+Income & Race & Eq. Odds & No-retrain & EO Gap & 0.011 & 0.015 & +0.004 & +34.1\% & +0.001 & 0.775 & 0.736 & 0.446 \\
+Income & Race & Eq. Odds & Cumulative & DP Gap & 0.049 & 0.050 & +0.001 & +2.2\% & -0.002 & 0.776 & 0.737 & 0.449 \\
+Income & Race & Eq. Odds & Cumulative & EO Gap & 0.011 & 0.013 & +0.002 & +19.4\% & +0.000 & 0.776 & 0.737 & 0.449 \\
+Income & Race & Eq. Odds & Last-year & DP Gap & 0.049 & 0.046 & -0.003 & -6.2\% & -0.004 & 0.775 & 0.738 & 0.457 \\
+Income & Race & Eq. Odds & Last-year & EO Gap & 0.011 & 0.011 & -0.001 & -5.3\% & -0.001 & 0.775 & 0.738 & 0.457 \\
+Income & Race & Eq. Odds & Threshold recal. & DP Gap & 0.049 & 0.044 & -0.005 & -9.7\% & -0.005 & 0.773 & 0.736 & 0.456 \\
+Income & Race & Eq. Odds & Threshold recal. & EO Gap & 0.011 & 0.010 & -0.001 & -11.7\% & -0.001 & 0.773 & 0.736 & 0.456 \\
+Income & Race & Eq. Odds & Cumulative fixed-N & DP Gap & 0.049 & 0.050 & +0.001 & +2.8\% & -0.002 & 0.777 & 0.736 & 0.443 \\
+Income & Race & Eq. Odds & Cumulative fixed-N & EO Gap & 0.011 & 0.013 & +0.002 & +18.1\% & +0.000 & 0.777 & 0.736 & 0.443 \\
+Income & Race & Fair. Constraint & No-retrain & DP Gap & 0.014 & 0.021 & +0.007 & +46.8\% & +0.000 & 0.766 & 0.681 & 0.329 \\
+Income & Race & Fair. Constraint & No-retrain & EO Gap & 0.051 & 0.034 & -0.017 & -33.8\% & -0.002 & 0.766 & 0.681 & 0.329 \\
+Income & Race & Fair. Constraint & Cumulative & DP Gap & 0.014 & 0.016 & +0.002 & +13.8\% & -0.001 & 0.768 & 0.688 & 0.341 \\
+Income & Race & Fair. Constraint & Cumulative & EO Gap & 0.051 & 0.035 & -0.016 & -31.2\% & -0.001 & 0.768 & 0.688 & 0.341 \\
+Income & Race & Fair. Constraint & Last-year & DP Gap & 0.014 & 0.023 & +0.009 & +62.6\% & +0.001 & 0.769 & 0.699 & 0.365 \\
+Income & Race & Fair. Constraint & Last-year & EO Gap & 0.051 & 0.034 & -0.017 & -32.7\% & -0.002 & 0.769 & 0.699 & 0.365 \\
+Income & Race & Fair. Constraint & Threshold recal. & DP Gap & 0.014 & 0.031 & +0.017 & +118.2\% & -0.000 & 0.771 & 0.696 & 0.350 \\
+Income & Race & Fair. Constraint & Threshold recal. & EO Gap & 0.051 & 0.021 & -0.030 & -58.8\% & -0.001 & 0.771 & 0.696 & 0.350 \\
+Income & Race & Fair. Constraint & Cumulative fixed-N & DP Gap & 0.014 & 0.015 & +0.001 & +7.8\% & -0.002 & 0.763 & 0.681 & 0.341 \\
+Income & Race & Fair. Constraint & Cumulative fixed-N & EO Gap & 0.051 & 0.046 & -0.006 & -11.2\% & +0.002 & 0.763 & 0.681 & 0.341 \\
+Income & Sex & Baseline & No-retrain & DP Gap & 0.040 & 0.034 & -0.005 & -13.6\% & -0.001 & 0.779 & 0.699 & 0.334 \\
+Income & Sex & Baseline & No-retrain & EO Gap & 0.022 & 0.027 & +0.005 & +20.2\% & +0.002 & 0.779 & 0.699 & 0.334 \\
+Income & Sex & Baseline & Cumulative & DP Gap & 0.040 & 0.032 & -0.008 & -20.4\% & -0.002 & 0.782 & 0.712 & 0.354 \\
+Income & Sex & Baseline & Cumulative & EO Gap & 0.022 & 0.032 & +0.010 & +43.9\% & +0.003 & 0.782 & 0.712 & 0.354 \\
+Income & Sex & Baseline & Last-year & DP Gap & 0.040 & 0.027 & -0.013 & -32.0\% & -0.004 & 0.783 & 0.722 & 0.374 \\
+Income & Sex & Baseline & Last-year & EO Gap & 0.022 & 0.040 & +0.018 & +78.2\% & +0.006 & 0.783 & 0.722 & 0.374 \\
+Income & Sex & Baseline & Threshold recal. & DP Gap & 0.040 & 0.008 & -0.032 & -79.6\% & -0.001 & 0.774 & 0.742 & 0.472 \\
+Income & Sex & Baseline & Threshold recal. & EO Gap & 0.022 & 0.062 & +0.040 & +176.8\% & +0.003 & 0.774 & 0.742 & 0.472 \\
+Income & Sex & Baseline & Cumulative fixed-N & DP Gap & 0.040 & 0.029 & -0.011 & -26.4\% & -0.003 & 0.782 & 0.715 & 0.360 \\
+Income & Sex & Baseline & Cumulative fixed-N & EO Gap & 0.022 & 0.036 & +0.013 & +59.0\% & +0.004 & 0.782 & 0.715 & 0.360 \\
+Income & Sex & Reweighing & No-retrain & DP Gap & 0.035 & 0.030 & -0.005 & -14.7\% & -0.001 & 0.779 & 0.701 & 0.336 \\
+Income & Sex & Reweighing & No-retrain & EO Gap & 0.028 & 0.033 & +0.005 & +17.4\% & +0.002 & 0.779 & 0.701 & 0.336 \\
+Income & Sex & Reweighing & Cumulative & DP Gap & 0.035 & 0.027 & -0.008 & -22.1\% & -0.002 & 0.782 & 0.714 & 0.356 \\
+Income & Sex & Reweighing & Cumulative & EO Gap & 0.028 & 0.038 & +0.009 & +33.7\% & +0.004 & 0.782 & 0.714 & 0.356 \\
+Income & Sex & Reweighing & Last-year & DP Gap & 0.035 & 0.023 & -0.012 & -35.1\% & -0.004 & 0.784 & 0.723 & 0.377 \\
+Income & Sex & Reweighing & Last-year & EO Gap & 0.028 & 0.045 & +0.017 & +59.9\% & +0.006 & 0.784 & 0.723 & 0.377 \\
+Income & Sex & Reweighing & Threshold recal. & DP Gap & 0.035 & 0.006 & -0.029 & -83.6\% & -0.001 & 0.774 & 0.741 & 0.472 \\
+Income & Sex & Reweighing & Threshold recal. & EO Gap & 0.028 & 0.068 & +0.039 & +139.5\% & +0.003 & 0.774 & 0.741 & 0.472 \\
+Income & Sex & Reweighing & Cumulative fixed-N & DP Gap & 0.035 & 0.025 & -0.010 & -28.6\% & -0.003 & 0.783 & 0.717 & 0.364 \\
+Income & Sex & Reweighing & Cumulative fixed-N & EO Gap & 0.028 & 0.041 & +0.013 & +44.8\% & +0.005 & 0.783 & 0.717 & 0.364 \\
+Income & Sex & Dem. Parity & No-retrain & DP Gap & 0.006 & 0.006 & +0.000 & +1.3\% & -0.000 & 0.776 & 0.739 & 0.454 \\
+Income & Sex & Dem. Parity & No-retrain & EO Gap & 0.067 & 0.072 & +0.005 & +7.9\% & +0.001 & 0.776 & 0.739 & 0.454 \\
+Income & Sex & Dem. Parity & Cumulative & DP Gap & 0.006 & 0.006 & -0.000 & -2.8\% & -0.000 & 0.777 & 0.740 & 0.456 \\
+Income & Sex & Dem. Parity & Cumulative & EO Gap & 0.067 & 0.072 & +0.005 & +7.6\% & +0.001 & 0.777 & 0.740 & 0.456 \\
+Income & Sex & Dem. Parity & Last-year & DP Gap & 0.006 & 0.004 & -0.002 & -27.2\% & -0.001 & 0.777 & 0.740 & 0.456 \\
+Income & Sex & Dem. Parity & Last-year & EO Gap & 0.067 & 0.069 & +0.002 & +3.7\% & -0.000 & 0.777 & 0.740 & 0.456 \\
+Income & Sex & Dem. Parity & Threshold recal. & DP Gap & 0.006 & 0.003 & -0.003 & -43.1\% & -0.001 & 0.776 & 0.740 & 0.457 \\
+Income & Sex & Dem. Parity & Threshold recal. & EO Gap & 0.067 & 0.069 & +0.002 & +2.7\% & -0.000 & 0.776 & 0.740 & 0.457 \\
+Income & Sex & Dem. Parity & Cumulative fixed-N & DP Gap & 0.006 & 0.006 & +0.000 & +5.2\% & -0.000 & 0.777 & 0.739 & 0.450 \\
+Income & Sex & Dem. Parity & Cumulative fixed-N & EO Gap & 0.067 & 0.074 & +0.007 & +10.6\% & +0.001 & 0.777 & 0.739 & 0.450 \\
+Income & Sex & Eq. Odds & No-retrain & DP Gap & 0.062 & 0.058 & -0.004 & -6.5\% & +0.000 & 0.779 & 0.743 & 0.457 \\
+Income & Sex & Eq. Odds & No-retrain & EO Gap & 0.012 & 0.012 & -0.000 & -2.1\% & -0.000 & 0.779 & 0.743 & 0.457 \\
+Income & Sex & Eq. Odds & Cumulative & DP Gap & 0.062 & 0.058 & -0.004 & -6.9\% & +0.000 & 0.780 & 0.743 & 0.455 \\
+Income & Sex & Eq. Odds & Cumulative & EO Gap & 0.012 & 0.012 & -0.000 & -1.0\% & -0.000 & 0.780 & 0.743 & 0.455 \\
+Income & Sex & Eq. Odds & Last-year & DP Gap & 0.062 & 0.059 & -0.003 & -5.0\% & +0.000 & 0.780 & 0.744 & 0.457 \\
+Income & Sex & Eq. Odds & Last-year & EO Gap & 0.012 & 0.010 & -0.002 & -14.4\% & -0.001 & 0.780 & 0.744 & 0.457 \\
+Income & Sex & Eq. Odds & Threshold recal. & DP Gap & 0.062 & 0.060 & -0.003 & -4.3\% & +0.000 & 0.780 & 0.744 & 0.456 \\
+Income & Sex & Eq. Odds & Threshold recal. & EO Gap & 0.012 & 0.008 & -0.003 & -29.3\% & -0.001 & 0.780 & 0.744 & 0.456 \\
+Income & Sex & Eq. Odds & Cumulative fixed-N & DP Gap & 0.062 & 0.058 & -0.004 & -6.9\% & +0.000 & 0.779 & 0.743 & 0.458 \\
+Income & Sex & Eq. Odds & Cumulative fixed-N & EO Gap & 0.012 & 0.012 & -0.000 & -1.7\% & -0.000 & 0.779 & 0.743 & 0.458 \\
+Income & Sex & Fair. Constraint & No-retrain & DP Gap & 0.018 & 0.013 & -0.005 & -26.1\% & -0.001 & 0.780 & 0.709 & 0.353 \\
+Income & Sex & Fair. Constraint & No-retrain & EO Gap & 0.049 & 0.054 & +0.005 & +9.6\% & +0.002 & 0.780 & 0.709 & 0.353 \\
+Income & Sex & Fair. Constraint & Cumulative & DP Gap & 0.018 & 0.016 & -0.002 & -11.4\% & -0.000 & 0.782 & 0.715 & 0.361 \\
+Income & Sex & Fair. Constraint & Cumulative & EO Gap & 0.049 & 0.052 & +0.002 & +4.8\% & +0.001 & 0.782 & 0.715 & 0.361 \\
+Income & Sex & Fair. Constraint & Last-year & DP Gap & 0.018 & 0.018 & -0.000 & -2.0\% & +0.001 & 0.783 & 0.723 & 0.380 \\
+Income & Sex & Fair. Constraint & Last-year & EO Gap & 0.049 & 0.051 & +0.002 & +3.6\% & +0.001 & 0.783 & 0.723 & 0.380 \\
+Income & Sex & Fair. Constraint & Threshold recal. & DP Gap & 0.018 & 0.010 & -0.008 & -45.5\% & -0.001 & 0.779 & 0.715 & 0.373 \\
+Income & Sex & Fair. Constraint & Threshold recal. & EO Gap & 0.049 & 0.059 & +0.010 & +19.9\% & +0.002 & 0.779 & 0.715 & 0.373 \\
+Income & Sex & Fair. Constraint & Cumulative fixed-N & DP Gap & 0.018 & 0.021 & +0.003 & +14.5\% & +0.002 & 0.783 & 0.716 & 0.363 \\
+Income & Sex & Fair. Constraint & Cumulative fixed-N & EO Gap & 0.049 & 0.047 & -0.003 & -5.5\% & -0.001 & 0.783 & 0.716 & 0.363 \\
+Employment & Race & Baseline & No-retrain & DP Gap & 0.012 & 0.013 & +0.001 & +7.0\% & +0.000 & 0.763 & 0.754 & 0.517 \\
+Employment & Race & Baseline & No-retrain & EO Gap & 0.027 & 0.023 & -0.005 & -16.7\% & +0.000 & 0.763 & 0.754 & 0.517 \\
+Employment & Race & Baseline & Cumulative & DP Gap & 0.012 & 0.008 & -0.004 & -30.1\% & -0.002 & 0.766 & 0.760 & 0.528 \\
+Employment & Race & Baseline & Cumulative & EO Gap & 0.027 & 0.018 & -0.009 & -33.8\% & -0.001 & 0.766 & 0.760 & 0.528 \\
+Employment & Race & Baseline & Last-year & DP Gap & 0.012 & 0.012 & -0.000 & -0.7\% & -0.000 & 0.765 & 0.760 & 0.534 \\
+Employment & Race & Baseline & Last-year & EO Gap & 0.027 & 0.020 & -0.007 & -25.4\% & -0.001 & 0.765 & 0.760 & 0.534 \\
+Employment & Race & Baseline & Threshold recal. & DP Gap & 0.012 & 0.008 & -0.004 & -36.1\% & +0.000 & 0.747 & 0.763 & 0.626 \\
+Employment & Race & Baseline & Threshold recal. & EO Gap & 0.027 & 0.017 & -0.010 & -37.3\% & +0.000 & 0.747 & 0.763 & 0.626 \\
+Employment & Race & Baseline & Cumulative fixed-N & DP Gap & 0.012 & 0.009 & -0.003 & -26.4\% & -0.001 & 0.765 & 0.758 & 0.524 \\
+Employment & Race & Baseline & Cumulative fixed-N & EO Gap & 0.027 & 0.017 & -0.010 & -37.5\% & -0.001 & 0.765 & 0.758 & 0.524 \\
+Employment & Race & Reweighing & No-retrain & DP Gap & 0.013 & 0.014 & +0.001 & +7.2\% & +0.000 & 0.764 & 0.754 & 0.516 \\
+Employment & Race & Reweighing & No-retrain & EO Gap & 0.029 & 0.025 & -0.005 & -16.3\% & +0.000 & 0.764 & 0.754 & 0.516 \\
+Employment & Race & Reweighing & Cumulative & DP Gap & 0.013 & 0.009 & -0.004 & -28.2\% & -0.002 & 0.767 & 0.760 & 0.528 \\
+Employment & Race & Reweighing & Cumulative & EO Gap & 0.029 & 0.020 & -0.010 & -33.1\% & -0.002 & 0.767 & 0.760 & 0.528 \\
+Employment & Race & Reweighing & Last-year & DP Gap & 0.013 & 0.013 & -0.001 & -4.0\% & -0.001 & 0.765 & 0.760 & 0.533 \\
+Employment & Race & Reweighing & Last-year & EO Gap & 0.029 & 0.021 & -0.008 & -26.9\% & -0.001 & 0.765 & 0.760 & 0.533 \\
+Employment & Race & Reweighing & Threshold recal. & DP Gap & 0.013 & 0.007 & -0.006 & -45.4\% & -0.000 & 0.747 & 0.763 & 0.627 \\
+Employment & Race & Reweighing & Threshold recal. & EO Gap & 0.029 & 0.017 & -0.012 & -41.8\% & -0.000 & 0.747 & 0.763 & 0.627 \\
+Employment & Race & Reweighing & Cumulative fixed-N & DP Gap & 0.013 & 0.010 & -0.004 & -27.1\% & -0.001 & 0.766 & 0.758 & 0.523 \\
+Employment & Race & Reweighing & Cumulative fixed-N & EO Gap & 0.029 & 0.018 & -0.011 & -37.5\% & -0.001 & 0.766 & 0.758 & 0.523 \\
+Employment & Race & Dem. Parity & No-retrain & DP Gap & 0.005 & 0.006 & +0.001 & +11.6\% & +0.000 & 0.759 & 0.761 & 0.567 \\
+Employment & Race & Dem. Parity & No-retrain & EO Gap & 0.019 & 0.015 & -0.004 & -21.4\% & +0.000 & 0.759 & 0.761 & 0.567 \\
+Employment & Race & Dem. Parity & Cumulative & DP Gap & 0.005 & 0.005 & +0.000 & +0.3\% & +0.000 & 0.762 & 0.762 & 0.558 \\
+Employment & Race & Dem. Parity & Cumulative & EO Gap & 0.019 & 0.013 & -0.007 & -34.7\% & -0.000 & 0.762 & 0.762 & 0.558 \\
+Employment & Race & Dem. Parity & Last-year & DP Gap & 0.005 & 0.005 & -0.000 & -2.1\% & -0.000 & 0.765 & 0.760 & 0.536 \\
+Employment & Race & Dem. Parity & Last-year & EO Gap & 0.019 & 0.010 & -0.009 & -46.4\% & -0.001 & 0.765 & 0.760 & 0.536 \\
+Employment & Race & Dem. Parity & Threshold recal. & DP Gap & 0.005 & 0.004 & -0.001 & -28.7\% & -0.000 & 0.761 & 0.761 & 0.555 \\
+Employment & Race & Dem. Parity & Threshold recal. & EO Gap & 0.019 & 0.012 & -0.007 & -35.9\% & -0.001 & 0.761 & 0.761 & 0.555 \\
+Employment & Race & Dem. Parity & Cumulative fixed-N & DP Gap & 0.005 & 0.005 & -0.000 & -0.1\% & +0.000 & 0.761 & 0.762 & 0.561 \\
+Employment & Race & Dem. Parity & Cumulative fixed-N & EO Gap & 0.019 & 0.013 & -0.006 & -31.0\% & -0.000 & 0.761 & 0.762 & 0.561 \\
+Employment & Race & Eq. Odds & No-retrain & DP Gap & 0.008 & 0.009 & +0.001 & +12.3\% & +0.000 & 0.758 & 0.757 & 0.551 \\
+Employment & Race & Eq. Odds & No-retrain & EO Gap & 0.009 & 0.010 & +0.001 & +10.4\% & +0.001 & 0.758 & 0.757 & 0.551 \\
+Employment & Race & Eq. Odds & Cumulative & DP Gap & 0.008 & 0.009 & +0.001 & +13.9\% & +0.000 & 0.762 & 0.759 & 0.540 \\
+Employment & Race & Eq. Odds & Cumulative & EO Gap & 0.009 & 0.010 & +0.001 & +11.2\% & +0.001 & 0.762 & 0.759 & 0.540 \\
+Employment & Race & Eq. Odds & Last-year & DP Gap & 0.008 & 0.009 & +0.000 & +2.9\% & +0.000 & 0.765 & 0.757 & 0.523 \\
+Employment & Race & Eq. Odds & Last-year & EO Gap & 0.009 & 0.009 & +0.000 & +0.9\% & +0.000 & 0.765 & 0.757 & 0.523 \\
+Employment & Race & Eq. Odds & Threshold recal. & DP Gap & 0.008 & 0.007 & -0.001 & -13.7\% & -0.000 & 0.760 & 0.756 & 0.538 \\
+Employment & Race & Eq. Odds & Threshold recal. & EO Gap & 0.009 & 0.007 & -0.002 & -24.2\% & -0.000 & 0.760 & 0.756 & 0.538 \\
+Employment & Race & Eq. Odds & Cumulative fixed-N & DP Gap & 0.008 & 0.009 & +0.001 & +12.4\% & +0.000 & 0.759 & 0.759 & 0.553 \\
+Employment & Race & Eq. Odds & Cumulative fixed-N & EO Gap & 0.009 & 0.011 & +0.001 & +13.8\% & +0.001 & 0.759 & 0.759 & 0.553 \\
+Employment & Race & Fair. Constraint & No-retrain & DP Gap & 0.011 & 0.012 & +0.001 & +7.9\% & +0.000 & 0.763 & 0.754 & 0.517 \\
+Employment & Race & Fair. Constraint & No-retrain & EO Gap & 0.027 & 0.022 & -0.005 & -17.6\% & +0.000 & 0.763 & 0.754 & 0.517 \\
+Employment & Race & Fair. Constraint & Cumulative & DP Gap & 0.011 & 0.008 & -0.003 & -25.8\% & -0.001 & 0.766 & 0.760 & 0.528 \\
+Employment & Race & Fair. Constraint & Cumulative & EO Gap & 0.027 & 0.018 & -0.009 & -33.9\% & -0.001 & 0.766 & 0.760 & 0.528 \\
+Employment & Race & Fair. Constraint & Last-year & DP Gap & 0.011 & 0.011 & +0.000 & +0.0\% & -0.000 & 0.765 & 0.760 & 0.534 \\
+Employment & Race & Fair. Constraint & Last-year & EO Gap & 0.027 & 0.020 & -0.007 & -25.5\% & -0.000 & 0.765 & 0.760 & 0.534 \\
+Employment & Race & Fair. Constraint & Threshold recal. & DP Gap & 0.011 & 0.011 & +0.000 & +0.0\% & +0.000 & 0.762 & 0.755 & 0.527 \\
+Employment & Race & Fair. Constraint & Threshold recal. & EO Gap & 0.027 & 0.021 & -0.006 & -23.3\% & +0.001 & 0.762 & 0.755 & 0.527 \\
+Employment & Race & Fair. Constraint & Cumulative fixed-N & DP Gap & 0.011 & 0.008 & -0.003 & -28.7\% & -0.001 & 0.766 & 0.758 & 0.524 \\
+Employment & Race & Fair. Constraint & Cumulative fixed-N & EO Gap & 0.027 & 0.017 & -0.010 & -36.8\% & -0.001 & 0.766 & 0.758 & 0.524 \\
+Employment & Sex & Baseline & No-retrain & DP Gap & 0.051 & 0.053 & +0.003 & +5.1\% & -0.000 & 0.765 & 0.756 & 0.517 \\
+Employment & Sex & Baseline & No-retrain & EO Gap & 0.115 & 0.117 & +0.001 & +1.3\% & -0.001 & 0.765 & 0.756 & 0.517 \\
+Employment & Sex & Baseline & Cumulative & DP Gap & 0.051 & 0.053 & +0.002 & +3.4\% & -0.001 & 0.767 & 0.760 & 0.527 \\
+Employment & Sex & Baseline & Cumulative & EO Gap & 0.115 & 0.115 & -0.001 & -0.5\% & -0.002 & 0.767 & 0.760 & 0.527 \\
+Employment & Sex & Baseline & Last-year & DP Gap & 0.051 & 0.050 & -0.000 & -0.8\% & -0.001 & 0.766 & 0.760 & 0.529 \\
+Employment & Sex & Baseline & Last-year & EO Gap & 0.115 & 0.111 & -0.004 & -3.6\% & -0.003 & 0.766 & 0.760 & 0.529 \\
+Employment & Sex & Baseline & Threshold recal. & DP Gap & 0.051 & 0.052 & +0.001 & +1.8\% & -0.000 & 0.745 & 0.764 & 0.633 \\
+Employment & Sex & Baseline & Threshold recal. & EO Gap & 0.115 & 0.130 & +0.014 & +12.5\% & -0.003 & 0.745 & 0.764 & 0.633 \\
+Employment & Sex & Baseline & Cumulative fixed-N & DP Gap & 0.051 & 0.054 & +0.003 & +6.1\% & -0.001 & 0.765 & 0.758 & 0.526 \\
+Employment & Sex & Baseline & Cumulative fixed-N & EO Gap & 0.115 & 0.117 & +0.001 & +1.2\% & -0.001 & 0.765 & 0.758 & 0.526 \\
+Employment & Sex & Reweighing & No-retrain & DP Gap & 0.053 & 0.056 & +0.002 & +4.6\% & -0.000 & 0.764 & 0.755 & 0.518 \\
+Employment & Sex & Reweighing & No-retrain & EO Gap & 0.117 & 0.119 & +0.002 & +1.4\% & -0.001 & 0.764 & 0.755 & 0.518 \\
+Employment & Sex & Reweighing & Cumulative & DP Gap & 0.053 & 0.055 & +0.002 & +3.6\% & -0.001 & 0.765 & 0.759 & 0.529 \\
+Employment & Sex & Reweighing & Cumulative & EO Gap & 0.117 & 0.117 & -0.000 & -0.2\% & -0.002 & 0.765 & 0.759 & 0.529 \\
+Employment & Sex & Reweighing & Last-year & DP Gap & 0.053 & 0.052 & -0.001 & -1.6\% & -0.001 & 0.765 & 0.759 & 0.530 \\
+Employment & Sex & Reweighing & Last-year & EO Gap & 0.117 & 0.113 & -0.005 & -3.8\% & -0.003 & 0.765 & 0.759 & 0.530 \\
+Employment & Sex & Reweighing & Threshold recal. & DP Gap & 0.053 & 0.052 & -0.001 & -1.5\% & -0.001 & 0.743 & 0.763 & 0.641 \\
+Employment & Sex & Reweighing & Threshold recal. & EO Gap & 0.117 & 0.131 & +0.013 & +11.4\% & -0.003 & 0.743 & 0.763 & 0.641 \\
+Employment & Sex & Reweighing & Cumulative fixed-N & DP Gap & 0.053 & 0.056 & +0.003 & +4.8\% & -0.001 & 0.764 & 0.758 & 0.528 \\
+Employment & Sex & Reweighing & Cumulative fixed-N & EO Gap & 0.117 & 0.118 & +0.001 & +0.6\% & -0.002 & 0.764 & 0.758 & 0.528 \\
+Employment & Sex & Dem. Parity & No-retrain & DP Gap & 0.004 & 0.006 & +0.002 & +61.2\% & +0.001 & 0.761 & 0.766 & 0.574 \\
+Employment & Sex & Dem. Parity & No-retrain & EO Gap & 0.073 & 0.065 & -0.008 & -10.6\% & -0.004 & 0.761 & 0.766 & 0.574 \\
+Employment & Sex & Dem. Parity & Cumulative & DP Gap & 0.004 & 0.006 & +0.002 & +62.6\% & +0.001 & 0.764 & 0.766 & 0.563 \\
+Employment & Sex & Dem. Parity & Cumulative & EO Gap & 0.073 & 0.060 & -0.013 & -17.7\% & -0.005 & 0.764 & 0.766 & 0.563 \\
+Employment & Sex & Dem. Parity & Last-year & DP Gap & 0.004 & 0.006 & +0.002 & +48.0\% & +0.000 & 0.767 & 0.764 & 0.542 \\
+Employment & Sex & Dem. Parity & Last-year & EO Gap & 0.073 & 0.065 & -0.008 & -11.2\% & -0.004 & 0.767 & 0.764 & 0.542 \\
+Employment & Sex & Dem. Parity & Threshold recal. & DP Gap & 0.004 & 0.005 & +0.001 & +33.3\% & +0.000 & 0.765 & 0.764 & 0.554 \\
+Employment & Sex & Dem. Parity & Threshold recal. & EO Gap & 0.073 & 0.069 & -0.004 & -5.2\% & -0.002 & 0.765 & 0.764 & 0.554 \\
+Employment & Sex & Dem. Parity & Cumulative fixed-N & DP Gap & 0.004 & 0.006 & +0.002 & +53.8\% & +0.001 & 0.763 & 0.766 & 0.569 \\
+Employment & Sex & Dem. Parity & Cumulative fixed-N & EO Gap & 0.073 & 0.063 & -0.010 & -14.0\% & -0.005 & 0.763 & 0.766 & 0.569 \\
+Employment & Sex & Eq. Odds & No-retrain & DP Gap & 0.037 & 0.039 & +0.002 & +6.4\% & +0.001 & 0.743 & 0.748 & 0.574 \\
+Employment & Sex & Eq. Odds & No-retrain & EO Gap & 0.008 & 0.013 & +0.006 & +76.7\% & +0.002 & 0.743 & 0.748 & 0.574 \\
+Employment & Sex & Eq. Odds & Cumulative & DP Gap & 0.037 & 0.041 & +0.004 & +9.6\% & +0.002 & 0.746 & 0.751 & 0.575 \\
+Employment & Sex & Eq. Odds & Cumulative & EO Gap & 0.008 & 0.014 & +0.006 & +82.2\% & +0.002 & 0.746 & 0.751 & 0.575 \\
+Employment & Sex & Eq. Odds & Last-year & DP Gap & 0.037 & 0.036 & -0.001 & -2.8\% & +0.000 & 0.751 & 0.750 & 0.555 \\
+Employment & Sex & Eq. Odds & Last-year & EO Gap & 0.008 & 0.010 & +0.003 & +36.8\% & +0.001 & 0.751 & 0.750 & 0.555 \\
+Employment & Sex & Eq. Odds & Threshold recal. & DP Gap & 0.037 & 0.037 & +0.000 & +0.4\% & +0.001 & 0.746 & 0.747 & 0.560 \\
+Employment & Sex & Eq. Odds & Threshold recal. & EO Gap & 0.008 & 0.010 & +0.003 & +38.1\% & +0.001 & 0.746 & 0.747 & 0.560 \\
+Employment & Sex & Eq. Odds & Cumulative fixed-N & DP Gap & 0.037 & 0.040 & +0.003 & +7.5\% & +0.002 & 0.745 & 0.750 & 0.575 \\
+Employment & Sex & Eq. Odds & Cumulative fixed-N & EO Gap & 0.008 & 0.014 & +0.006 & +82.6\% & +0.002 & 0.745 & 0.750 & 0.575 \\
+Employment & Sex & Fair. Constraint & No-retrain & DP Gap & 0.021 & 0.025 & +0.004 & +21.0\% & +0.000 & 0.762 & 0.747 & 0.499 \\
+Employment & Sex & Fair. Constraint & No-retrain & EO Gap & 0.079 & 0.078 & -0.001 & -1.2\% & -0.002 & 0.762 & 0.747 & 0.499 \\
+Employment & Sex & Fair. Constraint & Cumulative & DP Gap & 0.021 & 0.026 & +0.005 & +25.2\% & +0.000 & 0.770 & 0.761 & 0.520 \\
+Employment & Sex & Fair. Constraint & Cumulative & EO Gap & 0.079 & 0.084 & +0.005 & +6.0\% & +0.000 & 0.770 & 0.761 & 0.520 \\
+Employment & Sex & Fair. Constraint & Last-year & DP Gap & 0.021 & 0.027 & +0.007 & +32.0\% & +0.001 & 0.765 & 0.756 & 0.520 \\
+Employment & Sex & Fair. Constraint & Last-year & EO Gap & 0.079 & 0.081 & +0.002 & +2.5\% & -0.000 & 0.765 & 0.756 & 0.520 \\
+Employment & Sex & Fair. Constraint & Threshold recal. & DP Gap & 0.021 & 0.021 & +0.000 & +2.3\% & +0.000 & 0.761 & 0.754 & 0.528 \\
+Employment & Sex & Fair. Constraint & Threshold recal. & EO Gap & 0.079 & 0.074 & -0.005 & -6.4\% & -0.002 & 0.761 & 0.754 & 0.528 \\
+Employment & Sex & Fair. Constraint & Cumulative fixed-N & DP Gap & 0.021 & 0.025 & +0.005 & +22.7\% & -0.001 & 0.764 & 0.754 & 0.516 \\
+Employment & Sex & Fair. Constraint & Cumulative fixed-N & EO Gap & 0.079 & 0.080 & +0.001 & +0.7\% & -0.003 & 0.764 & 0.754 & 0.516 \\
+\bottomrule
+\end{longtable}
+\endgroup
