@@ -1,0 +1,31 @@
+cff-version: 1.2.0
+message: "If you use this benchmark, please cite the paper below."
+title: "benchmark-fairness-folktables"
+type: software
+version: "1.0.0"
+date-released: "2026-10-27"
+license: MIT
+repository-code: "https://github.com/ClaudiuBu/benchmark-fairness-folktables"
+authors:
+  - family-names: Butnaru
+    given-names: Claudiu-Cristian
+    affiliation: "Alexandru Ioan Cuza University of Iași"
+  - family-names: Crișan
+    given-names: Gloria Cerasela
+    affiliation: "Alexandru Ioan Cuza University of Iași; Vasile Alecsandri University of Bacău"
+preferred-citation:
+  type: conference-paper
+  title: "Fairness Drift as a Model Maintenance Problem: A Temporal Benchmark on Folktables"
+  authors:
+    - family-names: Butnaru
+      given-names: Claudiu-Cristian
+    - family-names: Crișan
+      given-names: Gloria Cerasela
+  collection-title: "Proceedings of the 23rd ACS/IEEE International Conference on Computer Systems and Applications (AICCSA 2026)"
+  conference:
+    name: "AICCSA 2026"
+    city: Sharjah
+    country: AE
+  publisher:
+    name: IEEE
+  year: 2026
