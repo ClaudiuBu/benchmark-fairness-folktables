@@ -1,6 +1,8 @@
 inputs:
   income_base_dir: "results/folktables/benchmark_temporal/folktables_benchmark_temporal"
   employment_base_dir: "results/folktables/benchmark_temporal_employment/folktables_benchmark_temporal_employment"
+  income_race_dir: "results/folktables/benchmark_temporal_race/folktables_benchmark_temporal_race"
+  employment_race_dir: "results/folktables/benchmark_temporal_employment_race/folktables_benchmark_temporal_employment_race"
 
 selection:
   method: "baseline"

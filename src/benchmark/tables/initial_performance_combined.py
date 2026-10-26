@@ -122,6 +122,7 @@ def _build_task_values(
     sex_attr: str,
     race_attr: str,
     performance_metrics: list[str],
+    race_summary_ci: pd.DataFrame | None = None,
 ) -> dict[str, str]:
     df = summary_ci
 
@@ -141,7 +142,9 @@ def _build_task_values(
 
     # Fairness metrics (DP/EO gap) DO vary by sensitive attribute, pick specific rows
     sex_row = _pick_row(df, method=method, maintenance=maintenance, sensitive_attribute=sex_attr)
-    race_row = _pick_row(df, method=method, maintenance=maintenance, sensitive_attribute=race_attr)
+    # Race gaps come from the race-configured run when one is given (one run per attribute)
+    race_df = race_summary_ci if race_summary_ci is not None else df
+    race_row = _pick_row(race_df, method=method, maintenance=maintenance, sensitive_attribute=race_attr)
 
     values["dp_gap_sex"] = _format_ci(sex_row, "dp_gap") if sex_row is not None else "-"
     values["eo_gap_sex"] = _format_ci(sex_row, "eo_gap") if sex_row is not None else "-"
@@ -178,6 +181,10 @@ def generate_combined_initial_performance_table(config_path: str) -> Path:
     income_summary_ci = _summarize_initial_rows(income_run_dir)
     employment_summary_ci = _summarize_initial_rows(employment_run_dir)
 
+    def _race_summary(key: str) -> pd.DataFrame | None:
+        race_dir = inputs.get(key)
+        return _summarize_initial_rows(_resolve_latest_output_dir(Path(race_dir))) if race_dir else None
+
     income_values = _build_task_values(
         income_summary_ci,
         method=method,
@@ -185,6 +192,7 @@ def generate_combined_initial_performance_table(config_path: str) -> Path:
         sex_attr=sex_attr,
         race_attr=race_attr,
         performance_metrics=performance_metrics,
+        race_summary_ci=_race_summary("income_race_dir"),
     )
     employment_values = _build_task_values(
         employment_summary_ci,
@@ -193,6 +201,7 @@ def generate_combined_initial_performance_table(config_path: str) -> Path:
         sex_attr=sex_attr,
         race_attr=race_attr,
         performance_metrics=performance_metrics,
+        race_summary_ci=_race_summary("employment_race_dir"),
     )
 
     output_path = Path(output_cfg["path"])
@@ -209,6 +218,8 @@ def generate_combined_initial_performance_table(config_path: str) -> Path:
 
     for metric in performance_metrics:
         metric_label = METRIC_LABELS.get(metric, metric.replace("_", " ").title())
+        if metric == "oe_gap":
+            metric_label += " (Sex)"
         latex_lines.append(
             f"{metric_label} & {income_values[metric]} & {employment_values[metric]} \\\\"
         )
